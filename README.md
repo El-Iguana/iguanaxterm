@@ -1,5 +1,7 @@
 # IguanaXterm
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+
 A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your remote connections from a single web UI — no client software required.
 
 ![IguanaXterm](static/el_iguana.png)
