@@ -1,0 +1,38 @@
+services:
+
+  redis:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    # Persist sessions to disk every 5 min if at least 1 key changed.
+    # Remove --save args if you don't need sessions to survive a Redis restart.
+    command: redis-server --save 300 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ganxterm:
+    build:
+      context: .
+      dockerfile: Containerfile
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    env_file:
+      - .env
+    environment:
+      # Override the Redis URL to reach the redis service by name.
+      - REDIS_URL=redis://redis:6379/0
+      - GANXTERM_DATA_DIR=/data
+    volumes:
+      - ganxterm_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  ganxterm_data:

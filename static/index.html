@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GanXterm</title>
+  <title>IguanaXterm</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -34,394 +35,185 @@
       height: 100vh;
     }
 
+    /* ── Login Screen ── */
+    .login-screen {
+      position: fixed; inset: 0;
+      background: var(--bg-deep);
+      z-index: 3000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px 36px 32px;
+      width: 380px; max-width: 95vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    }
+    .login-mascot { text-align: center; margin-bottom: 12px; }
+    .login-mascot img { width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 2px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,.5); }
+    .login-logo { font-size: 1.7rem; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-align: center; margin-bottom: 4px; }
+    .login-logo span { color: var(--accent2); }
+    .login-sub { text-align: center; color: var(--muted); font-size: 0.8rem; margin-bottom: 28px; }
+    .login-error { background: rgba(248,81,73,.1); border: 1px solid var(--danger); border-radius: 5px; color: var(--danger); font-size: 0.8rem; padding: 8px 12px; margin-bottom: 14px; display: none; }
+    .login-error.show { display: block; }
+
     /* ── Header ── */
     header {
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
       padding: 0 16px;
       height: 42px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
-      user-select: none;
+      display: flex; align-items: center; gap: 12px;
+      flex-shrink: 0; user-select: none;
     }
+    .logo-img { width: 26px; height: 26px; object-fit: cover; border-radius: 50%; border: 1px solid var(--border); flex-shrink: 0; }
     .logo { color: var(--accent); font-weight: 700; font-size: 1rem; letter-spacing: 1px; }
     .logo span { color: var(--accent2); }
     .tagline { color: var(--muted); font-size: 0.75rem; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .hdr-user { color: var(--muted); font-size: 0.75rem; margin-right: 4px; }
+    .btn-hdr { background: var(--bg-item); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 4px 10px; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: color .15s, border-color .15s; }
+    .btn-hdr:hover { color: var(--text); border-color: var(--accent); }
+    .btn-hdr-danger:hover { color: var(--danger); border-color: var(--danger); }
 
     /* ── Layout ── */
     .layout { display: flex; flex: 1; overflow: hidden; }
 
     /* ── Session Sidebar ── */
-    .sidebar {
-      width: 260px;
-      min-width: 180px;
-      background: var(--bg-panel);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-    .sidebar-hdr {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-    }
-    .sidebar-hdr .label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: var(--muted);
-    }
-    .btn-add {
-      width: 26px; height: 26px;
-      background: var(--accent);
-      border: none; border-radius: 4px;
-      color: var(--bg-deep);
-      font-size: 1.1rem; font-weight: 700;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: opacity .15s;
-    }
+    .sidebar { width: 260px; min-width: 180px; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-hdr { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .sidebar-hdr .label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+    .btn-add { width: 26px; height: 26px; background: var(--accent); border: none; border-radius: 4px; color: var(--bg-deep); font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity .15s; }
     .btn-add:hover { opacity: .85; }
-
-    .session-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px;
-    }
+    .session-list { flex: 1; overflow-y: auto; padding: 8px; }
     .session-list::-webkit-scrollbar { width: 5px; }
     .session-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .session-empty { padding: 20px 12px; text-align: center; color: var(--muted); font-size: 0.8rem; line-height: 1.7; }
 
-    .session-empty {
-      padding: 20px 12px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.7;
-    }
-    .session-card {
-      background: var(--bg-item);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px 8px;
-      margin-bottom: 6px;
-      transition: border-color .15s, background .15s;
-    }
+    /* Folder groups */
+    .folder-group { margin-bottom: 4px; }
+    .folder-hdr { display: flex; align-items: center; gap: 5px; padding: 5px 8px; cursor: pointer; border-radius: 4px; user-select: none; transition: background .15s; }
+    .folder-hdr:hover { background: var(--bg-hover); }
+    .folder-arrow { color: var(--muted); font-size: 0.7rem; flex-shrink: 0; width: 10px; }
+    .folder-icon { font-size: 0.82rem; flex-shrink: 0; }
+    .folder-name { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; flex: 1; }
+    .folder-count { font-size: 0.65rem; background: var(--bg-item); border: 1px solid var(--border); color: var(--muted); border-radius: 10px; padding: 0 5px; flex-shrink: 0; }
+    .folder-sessions { padding-left: 8px; }
+
+    /* Session cards */
+    .session-card { background: var(--bg-item); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px 8px; margin-bottom: 6px; transition: border-color .15s, background .15s; }
     .session-card:hover { border-color: var(--accent); background: var(--bg-hover); }
     .s-name { font-weight: 600; font-size: 0.88rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .s-type { font-size: 0.6rem; font-weight: 700; background: rgba(210,153,34,.15); color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 0 4px; text-transform: uppercase; letter-spacing: .5px; vertical-align: middle; margin-left: 4px; }
     .s-host { font-size: 0.73rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .s-desc { font-size: 0.72rem; color: var(--muted); margin-top: 2px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .s-actions { display: flex; gap: 5px; margin-top: 8px; }
-    .btn-xs {
-      padding: 3px 9px;
-      border: none; border-radius: 3px;
-      font-size: 0.72rem; font-weight: 600;
-      cursor: pointer; transition: opacity .15s;
-    }
+    .btn-xs { padding: 3px 9px; border: none; border-radius: 3px; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
     .btn-xs:hover { opacity: .85; }
     .bx-connect { background: var(--accent);  color: var(--bg-deep); }
     .bx-edit    { background: var(--warn);    color: var(--bg-deep); }
     .bx-delete  { background: var(--danger);  color: #fff; }
 
     /* ── Terminal area ── */
-    .terminal-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      min-width: 0;
-    }
-    .tab-bar {
-      background: var(--bg-panel);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: flex-end;
-      padding: 0 8px;
-      gap: 3px;
-      min-height: 36px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      flex-shrink: 0;
-    }
+    .terminal-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    .tab-bar { background: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; padding: 0 8px; gap: 3px; min-height: 36px; overflow-x: auto; overflow-y: hidden; flex-shrink: 0; }
     .tab-bar::-webkit-scrollbar { height: 3px; }
     .tab-bar::-webkit-scrollbar-thumb { background: var(--border); }
-
-    .tab {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      border: 1px solid transparent;
-      border-bottom: none;
-      border-radius: 5px 5px 0 0;
-      font-size: 0.78rem;
-      color: var(--muted);
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-      user-select: none;
-      transition: color .15s, background .15s;
-    }
+    .tab { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid transparent; border-bottom: none; border-radius: 5px 5px 0 0; font-size: 0.78rem; color: var(--muted); cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; transition: color .15s, background .15s; }
     .tab:hover { background: var(--bg-item); color: var(--text); }
     .tab.active { background: var(--bg-deep); border-color: var(--border); color: var(--accent); }
     .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); flex-shrink: 0; }
     .tab .dot.err { background: var(--danger); }
     .tab .tab-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-    .tab .sftp-tog {
-      font-size: 0.68rem; font-weight: 700;
-      padding: 1px 5px;
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      background: var(--bg-item);
-      color: var(--muted);
-      cursor: pointer;
-      transition: color .15s, border-color .15s, background .15s;
-      letter-spacing: .5px;
-    }
+    .tab .sftp-tog { font-size: 0.68rem; font-weight: 700; padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-item); color: var(--muted); cursor: pointer; transition: color .15s, border-color .15s, background .15s; letter-spacing: .5px; }
     .tab .sftp-tog:hover { color: var(--text); border-color: var(--accent); }
     .tab .sftp-tog.on { color: var(--accent2); border-color: var(--accent2); background: rgba(63,185,80,.1); }
-    .tab .close {
-      background: none; border: none; color: inherit;
-      cursor: pointer; font-size: 1rem; line-height: 1;
-      padding: 0; opacity: .4; transition: opacity .15s;
-    }
+    .tab .close { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; opacity: .4; transition: opacity .15s; }
     .tab .close:hover { opacity: 1; color: var(--danger); }
 
     /* ── Panes ── */
     .term-container { flex: 1; position: relative; overflow: hidden; }
-
-    .welcome {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 12px; color: var(--muted); pointer-events: none;
-    }
+    .welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); pointer-events: none; }
     .welcome h2 { font-size: 1.6rem; color: var(--accent); letter-spacing: 2px; }
     .welcome p  { font-size: 0.85rem; }
-
-    /* Each connected tab's pane = horizontal split (SFTP | xterm) */
-    .term-pane {
-      position: absolute; inset: 0;
-      display: none;
-      flex-direction: row;
-      overflow: hidden;
-    }
+    .term-pane { position: absolute; inset: 0; display: none; flex-direction: row; overflow: hidden; }
     .term-pane.active { display: flex; }
 
-    /* xterm wrapper — grows to fill remaining space */
-    .xterm-wrapper { flex: 1; min-width: 0; padding: 4px; overflow: hidden; }
+    /* xterm wrapper — position:relative so the search bar can float inside */
+    .xterm-wrapper { position: relative; flex: 1; min-width: 0; padding: 4px; overflow: hidden; }
+
+    /* ── Terminal search bar ── */
+    .term-search {
+      position: absolute; top: 8px; right: 12px; z-index: 100;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      display: none; align-items: center; gap: 4px;
+      padding: 5px 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    }
+    .term-search.show { display: flex; }
+    .tsearch-input { background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); border-radius: 3px; padding: 3px 8px; font-size: 0.78rem; outline: none; width: 180px; font-family: inherit; }
+    .tsearch-input:focus { border-color: var(--accent); }
+    .tsearch-cnt { font-size: 0.68rem; color: var(--muted); min-width: 56px; text-align: center; }
+    .tsearch-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; padding: 2px 6px; border-radius: 3px; transition: color .15s, background .15s; line-height: 1; }
+    .tsearch-btn:hover { color: var(--text); background: var(--border); }
 
     /* ── SFTP Panel ── */
-    .sftp-panel {
-      width: 300px;
-      flex-shrink: 0;
-      background: var(--bg-panel);
-      border-right: 1px solid var(--border);
-      display: none;          /* toggled via JS */
-      flex-direction: column;
-      overflow: hidden;
-    }
+    .sftp-panel { width: 300px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border); display: none; flex-direction: column; overflow: hidden; }
     .sftp-panel.visible { display: flex; }
-
-    .sftp-toolbar {
-      padding: 5px 8px;
-      background: var(--bg-item);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-    .sftp-path-lbl {
-      flex: 1;
-      font-size: 0.72rem;
-      font-family: 'Cascadia Code','Fira Code','Courier New',monospace;
-      color: var(--accent);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .stb {
-      background: var(--bg-hover);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 0.72rem;
-      padding: 3px 7px;
-      white-space: nowrap;
-      flex-shrink: 0;
-      transition: color .15s, border-color .15s;
-    }
+    .sftp-toolbar { padding: 5px 8px; background: var(--bg-item); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .sftp-path-lbl { flex: 1; font-size: 0.72rem; font-family: 'Cascadia Code','Fira Code','Courier New',monospace; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stb { background: var(--bg-hover); border: 1px solid var(--border); color: var(--muted); border-radius: 3px; cursor: pointer; font-size: 0.72rem; padding: 3px 7px; white-space: nowrap; flex-shrink: 0; transition: color .15s, border-color .15s; }
     .stb:hover { color: var(--text); border-color: var(--accent); }
-
-    .sftp-bc {
-      padding: 4px 10px;
-      font-size: 0.72rem;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0;
-      flex-shrink: 0;
-      min-height: 24px;
-      align-items: center;
-    }
+    .sftp-bc { padding: 4px 10px; font-size: 0.72rem; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0; flex-shrink: 0; min-height: 24px; align-items: center; }
     .bc-seg { cursor: pointer; color: var(--accent); }
     .bc-seg:hover { text-decoration: underline; }
     .bc-sep { color: var(--muted); margin: 0 2px; }
     .bc-last { color: var(--muted); }
-
-    /* ── SFTP file list ── */
-    .sftp-files {
-      flex: 1;
-      overflow-y: auto;
-      padding: 4px 0;
-    }
+    .sftp-files { flex: 1; overflow-y: auto; padding: 4px 0; }
     .sftp-files::-webkit-scrollbar { width: 5px; }
     .sftp-files::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    .sftp-files.drag-over {
-      outline: 2px dashed var(--accent);
-      outline-offset: -4px;
-      background: rgba(88,166,255,.05);
-    }
-
-    .sftp-row {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 8px;
-      border-radius: 3px;
-      transition: background .1s;
-      min-width: 0;
-    }
+    .sftp-files.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; background: rgba(88,166,255,.05); }
+    .sftp-row { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 3px; transition: background .1s; min-width: 0; }
     .sftp-row:hover { background: var(--bg-hover); }
     .sftp-row.dir { cursor: pointer; }
     .sftp-row.dir .sr-name { color: var(--accent); }
     .sr-icon { font-size: 0.82rem; flex-shrink: 0; }
-    .sr-name {
-      flex: 1;
-      font-size: 0.78rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sr-size {
-      font-size: 0.68rem;
-      color: var(--muted);
-      min-width: 44px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-    .sr-actions {
-      display: flex;
-      gap: 2px;
-      opacity: 0;
-      transition: opacity .15s;
-      flex-shrink: 0;
-    }
+    .sr-name { flex: 1; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sr-size { font-size: 0.68rem; color: var(--muted); min-width: 44px; text-align: right; flex-shrink: 0; }
+    .sr-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; flex-shrink: 0; }
     .sftp-row:hover .sr-actions { opacity: 1; }
-    .sa {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 0.7rem;
-      padding: 2px 4px;
-      border-radius: 3px;
-      line-height: 1;
-      transition: color .15s, background .15s;
-    }
+    .sa { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.7rem; padding: 2px 4px; border-radius: 3px; line-height: 1; transition: color .15s, background .15s; }
     .sa:hover { color: var(--text); background: var(--border); }
     .sa.sa-dl:hover  { color: var(--accent2); }
     .sa.sa-del:hover { color: var(--danger); }
-
-    .sftp-msg {
-      padding: 18px 12px;
-      text-align: center;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
+    .sftp-msg { padding: 18px 12px; text-align: center; font-size: 0.78rem; color: var(--muted); }
     .sftp-msg.err { color: var(--danger); }
 
     /* Progress toast */
-    .sftp-toast {
-      position: fixed;
-      bottom: 30px;
-      right: 20px;
-      background: var(--bg-item);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 16px;
-      font-size: 0.8rem;
-      color: var(--text);
-      z-index: 500;
-      display: none;
-      gap: 10px;
-      align-items: center;
-      box-shadow: 0 8px 24px rgba(0,0,0,.4);
-    }
+    .sftp-toast { position: fixed; bottom: 30px; right: 20px; background: var(--bg-item); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; font-size: 0.8rem; color: var(--text); z-index: 500; display: none; gap: 10px; align-items: center; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
     .sftp-toast.show { display: flex; }
     .toast-spin { animation: spin .8s linear infinite; display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Status bar ── */
-    .status-bar {
-      background: var(--bg-panel);
-      border-top: 1px solid var(--border);
-      padding: 3px 14px;
-      font-size: 0.72rem;
-      color: var(--muted);
-      display: flex;
-      gap: 20px;
-      flex-shrink: 0;
-    }
+    .status-bar { background: var(--bg-panel); border-top: 1px solid var(--border); padding: 3px 14px; font-size: 0.72rem; color: var(--muted); display: flex; gap: 20px; flex-shrink: 0; }
     .s-ok   { color: var(--accent2); }
     .s-err  { color: var(--danger); }
     .s-info { color: var(--accent); }
 
-    /* ── Modal ── */
-    .overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.65);
-      z-index: 999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-    }
+    /* ── Modal (shared) ── */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 999; display: none; align-items: center; justify-content: center; }
     .overlay.show { display: flex; }
-    .modal {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 28px 28px 22px;
-      width: 500px;
-      max-width: 95vw;
-      box-shadow: 0 20px 60px rgba(0,0,0,.6);
-    }
+    .modal { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 28px 28px 22px; width: 500px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
     .modal h2 { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 20px; letter-spacing: .5px; }
     .form-row { display: flex; gap: 12px; }
     .form-row .fg { flex: 1; }
     .fg { margin-bottom: 13px; }
     .fg label { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
-    .fg input, .fg textarea {
-      width: 100%;
-      background: var(--bg-deep);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text);
-      padding: 7px 10px;
-      font-size: 0.88rem;
-      outline: none;
-      font-family: inherit;
-      transition: border-color .15s;
-    }
+    .fg input, .fg textarea { width: 100%; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 7px 10px; font-size: 0.88rem; outline: none; font-family: inherit; transition: border-color .15s; }
     .fg input:focus, .fg textarea:focus { border-color: var(--accent); }
     .fg textarea { height: 90px; resize: vertical; font-family: 'Cascadia Code','Fira Code','Courier New',monospace; font-size: 0.8rem; }
     .auth-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
@@ -434,17 +226,66 @@
     .btn:hover { opacity: .85; }
     .btn-primary   { background: var(--accent); color: var(--bg-deep); }
     .btn-secondary { background: var(--bg-item); color: var(--text); border: 1px solid var(--border); }
+    .modal-error { color: var(--danger); font-size: 0.78rem; margin-top: 8px; min-height: 18px; }
+
+    /* Session type selector (SSH / Telnet) */
+    .type-tabs { display: flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 14px; }
+    .type-tab { flex: 1; padding: 6px 14px; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--muted); text-align: center; transition: color .15s, background .15s; user-select: none; }
+    .type-tab.active { background: var(--accent); color: var(--bg-deep); }
+    .type-tab:not(.active):hover { background: var(--bg-hover); color: var(--text); }
+
+    /* ── Admin users modal ── */
+    .admin-modal { width: 520px; }
+    .admin-user-list { margin-bottom: 20px; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+    .admin-user-list::-webkit-scrollbar { width: 5px; }
+    .admin-user-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .admin-user-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+    .admin-user-row:last-child { border-bottom: none; }
+    .aur-name { flex: 1; font-weight: 600; }
+    .aur-badge { font-size: 0.65rem; font-weight: 700; background: rgba(88,166,255,.15); color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 5px; text-transform: uppercase; letter-spacing: .5px; }
+    .aur-date { color: var(--muted); font-size: 0.72rem; }
+    .aur-you  { color: var(--muted); font-size: 0.72rem; font-style: italic; }
+    .admin-create-section h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
+    .admin-create-row { display: flex; gap: 8px; align-items: flex-end; }
+    .admin-create-row .fg { flex: 1; margin-bottom: 0; }
+    .admin-check-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+    .admin-check-row input[type=checkbox] { width: auto; }
   </style>
 </head>
 <body>
 
+<!-- ── Login Screen ── -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-mascot"><img src="/static/el_iguana.png" alt="El Iguana" /></div>
+    <div class="login-logo">Iguana<span>X</span>term</div>
+    <div class="login-sub">Browser SSH Terminal</div>
+    <div id="loginError" class="login-error"></div>
+    <div class="fg">
+      <label>Username</label>
+      <input id="loginUser" type="text" autocomplete="username" spellcheck="false" />
+    </div>
+    <div class="fg">
+      <label>Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" />
+    </div>
+    <button id="btnLogin" class="btn btn-primary" style="width:100%;margin-top:4px">Sign In</button>
+  </div>
+</div>
+
 <header>
-  <div class="logo">Gan<span>X</span>term</div>
+  <img src="/static/el_iguana.png" alt="" class="logo-img" />
+  <div class="logo">Iguana<span>X</span>term</div>
   <div class="tagline">Browser SSH Terminal</div>
+  <div class="header-right">
+    <span id="hdrUsername" class="hdr-user"></span>
+    <button id="btnChangePass" class="btn-hdr">Password</button>
+    <button id="btnAdminPanel" class="btn-hdr" style="display:none">Users</button>
+    <button id="btnLogout"     class="btn-hdr btn-hdr-danger">Logout</button>
+  </div>
 </header>
 
 <div class="layout">
-  <!-- ── Session sidebar ── -->
   <aside class="sidebar">
     <div class="sidebar-hdr">
       <span class="label">Sessions</span>
@@ -455,12 +296,11 @@
     </div>
   </aside>
 
-  <!-- ── Terminal area ── -->
   <div class="terminal-area">
     <div class="tab-bar" id="tabBar"></div>
     <div class="term-container" id="termContainer">
       <div class="welcome" id="welcome">
-        <h2>GanXterm</h2>
+        <h2>IguanaXterm</h2>
         <p>Select a session and click <strong>Connect</strong></p>
       </div>
     </div>
@@ -469,7 +309,6 @@
 
 <div class="status-bar" id="statusBar"><span>Ready</span></div>
 
-<!-- SFTP upload progress toast -->
 <div class="sftp-toast" id="sftpToast">
   <span class="toast-spin">⟳</span>
   <span id="toastMsg">Uploading…</span>
@@ -479,6 +318,11 @@
 <div class="overlay" id="overlay">
   <div class="modal">
     <h2 id="modalTitle">New Session</h2>
+
+    <div class="type-tabs">
+      <div class="type-tab active" data-type="ssh">SSH</div>
+      <div class="type-tab" data-type="telnet">Telnet</div>
+    </div>
 
     <div class="fg">
       <label>Session Name *</label>
@@ -496,29 +340,38 @@
       </div>
     </div>
 
-    <div class="fg">
+    <div id="fUserRow" class="fg">
       <label>Username *</label>
       <input id="fUser" type="text" placeholder="root" autocomplete="off" />
     </div>
+
+    <div class="fg">
+      <label>Folder <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input id="fFolder" type="text" placeholder="e.g. Home Lab, Routers" list="folderSuggestions" autocomplete="off" />
+      <datalist id="folderSuggestions"></datalist>
+    </div>
+
     <div class="fg">
       <label>Description</label>
       <input id="fDesc" type="text" placeholder="Optional note" autocomplete="off" />
     </div>
 
-    <div class="auth-tabs">
-      <div class="auth-tab active" data-tab="password">Password</div>
-      <div class="auth-tab" data-tab="key">Private Key</div>
-    </div>
-    <div class="auth-panel active" id="panelPassword">
-      <div class="fg">
-        <label>Password</label>
-        <input id="fPassword" type="password" placeholder="Leave blank if using a key" autocomplete="new-password" />
+    <div id="authSection">
+      <div class="auth-tabs">
+        <div class="auth-tab active" data-tab="password">Password</div>
+        <div class="auth-tab" data-tab="key">Private Key</div>
       </div>
-    </div>
-    <div class="auth-panel" id="panelKey">
-      <div class="fg">
-        <label>Private Key (PEM)</label>
-        <textarea id="fKey" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;…&#10;-----END RSA PRIVATE KEY-----"></textarea>
+      <div class="auth-panel active" id="panelPassword">
+        <div class="fg">
+          <label>Password</label>
+          <input id="fPassword" type="password" placeholder="Leave blank if using a key" autocomplete="new-password" />
+        </div>
+      </div>
+      <div class="auth-panel" id="panelKey">
+        <div class="fg">
+          <label>Private Key (PEM)</label>
+          <textarea id="fKey" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;…&#10;-----END RSA PRIVATE KEY-----"></textarea>
+        </div>
       </div>
     </div>
 
@@ -529,72 +382,226 @@
   </div>
 </div>
 
+<!-- ── Change Password Modal ── -->
+<div class="overlay" id="overlayCP">
+  <div class="modal" style="width:380px">
+    <h2>Change Password</h2>
+    <div class="fg"><label>Current Password</label><input id="cpCurrent" type="password" autocomplete="current-password" /></div>
+    <div class="fg"><label>New Password</label><input id="cpNew" type="password" autocomplete="new-password" /></div>
+    <div class="fg"><label>Confirm New Password</label><input id="cpConfirm" type="password" autocomplete="new-password" /></div>
+    <div class="modal-error" id="cpError"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btnCancelCP">Cancel</button>
+      <button class="btn btn-primary"   id="btnSaveCP">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Admin Users Modal ── -->
+<div class="overlay" id="overlayAdmin">
+  <div class="modal admin-modal">
+    <h2>User Management</h2>
+    <div class="admin-user-list" id="adminUserList"><div class="sftp-msg">Loading…</div></div>
+    <div class="admin-create-section">
+      <h3>Create New User</h3>
+      <div class="admin-create-row">
+        <div class="fg"><label>Username</label><input id="adminNewUser" type="text" autocomplete="off" spellcheck="false" /></div>
+        <div class="fg"><label>Password</label><input id="adminNewPass" type="password" autocomplete="new-password" /></div>
+        <button class="btn btn-primary" id="btnCreateUser" style="margin-bottom:0;flex-shrink:0">Add</button>
+      </div>
+      <div class="admin-check-row">
+        <input type="checkbox" id="adminIsAdmin" />
+        <label for="adminIsAdmin" style="text-transform:none;letter-spacing:0;font-size:0.78rem;color:var(--muted);cursor:pointer">Grant admin privileges</label>
+      </div>
+      <div class="modal-error" id="adminError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btnCancelAdmin">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============================================================ SCRIPT ===== -->
 <script>
 'use strict';
 
 // ── Globals ───────────────────────────────────────────────────────────────────
-let sessions = [];
-let editingId = null;
-let tabSeq = 0;
-// tabs[tabId] = { sessionId, name, term, ws, fit, pane, tabEl, xtermWrapper,
-//                 sftp: { visible, path } }
-const tabs = {};
+let sessions    = [];
+let editingId   = null;
+let tabSeq      = 0;
+let currentUser = null;
+const tabs       = {};
+const folderState = {};  // folder name → false means collapsed
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const esc = s => String(s)
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 function setStatus(msg, cls = '') {
   $('statusBar').innerHTML = `<span class="${esc(cls)}">${esc(msg)}</span>`;
 }
-
-function showToast(msg) {
-  $('toastMsg').textContent = msg;
-  $('sftpToast').classList.add('show');
-}
+function showToast(msg) { $('toastMsg').textContent = msg; $('sftpToast').classList.add('show'); }
 function hideToast() { $('sftpToast').classList.remove('show'); }
-
-function joinPath(base, name) {
-  return (base.endsWith('/') ? base : base + '/') + name;
-}
-function parentPath(p) {
-  const parts = p.replace(/\/$/, '').split('/');
-  parts.pop();
-  return parts.join('/') || '/';
-}
-
+function joinPath(base, name) { return (base.endsWith('/') ? base : base + '/') + name; }
+function parentPath(p) { const parts = p.replace(/\/$/, '').split('/'); parts.pop(); return parts.join('/') || '/'; }
 function fmtSize(bytes) {
   if (!bytes) return '-';
-  if (bytes < 1024)        return `${bytes}B`;
-  if (bytes < 1048576)     return `${(bytes/1024).toFixed(1)}K`;
-  if (bytes < 1073741824)  return `${(bytes/1048576).toFixed(1)}M`;
+  if (bytes < 1024)       return `${bytes}B`;
+  if (bytes < 1048576)    return `${(bytes/1024).toFixed(1)}K`;
+  if (bytes < 1073741824) return `${(bytes/1048576).toFixed(1)}M`;
   return `${(bytes/1073741824).toFixed(1)}G`;
 }
-
 function fileIcon(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  const m = {
-    js:'📜',ts:'📜',jsx:'📜',tsx:'📜',py:'🐍',rb:'💎',go:'🐹',rs:'⚙',c:'⚙',cpp:'⚙',
-    sh:'⚙',bash:'⚙',zsh:'⚙',fish:'⚙',
-    html:'🌐',css:'🎨',json:'📋',xml:'📋',yaml:'📋',yml:'📋',toml:'📋',
-    md:'📝',txt:'📝',log:'📋',conf:'⚙',cfg:'⚙',ini:'⚙',env:'⚙',
-    jpg:'🖼',jpeg:'🖼',png:'🖼',gif:'🖼',svg:'🖼',webp:'🖼',ico:'🖼',
-    pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',
-    zip:'📦',tar:'📦',gz:'📦',bz2:'📦',xz:'📦',rar:'📦','7z':'📦',
-    mp3:'🎵',wav:'🎵',flac:'🎵',mp4:'🎬',mkv:'🎬',avi:'🎬',mov:'🎬',
-    db:'🗄',sqlite:'🗄',sql:'🗄',
-  };
+  const m = { js:'📜',ts:'📜',jsx:'📜',tsx:'📜',py:'🐍',rb:'💎',go:'🐹',rs:'⚙',c:'⚙',cpp:'⚙',sh:'⚙',bash:'⚙',zsh:'⚙',fish:'⚙',html:'🌐',css:'🎨',json:'📋',xml:'📋',yaml:'📋',yml:'📋',toml:'📋',md:'📝',txt:'📝',log:'📋',conf:'⚙',cfg:'⚙',ini:'⚙',env:'⚙',jpg:'🖼',jpeg:'🖼',png:'🖼',gif:'🖼',svg:'🖼',webp:'🖼',ico:'🖼',pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',zip:'📦',tar:'📦',gz:'📦',bz2:'📦',xz:'📦',rar:'📦','7z':'📦',mp3:'🎵',wav:'🎵',flac:'🎵',mp4:'🎬',mkv:'🎬',avi:'🎬',mov:'🎬',db:'🗄',sqlite:'🗄',sql:'🗄' };
   return m[ext] || '📄';
 }
 
-// ── Session CRUD ─────────────────────────────────────────────────────────────
-async function loadSessions() {
-  const r = await fetch('/api/sessions');
-  sessions = await r.json();
+// ── Auth fetch wrapper ────────────────────────────────────────────────────────
+async function apiFetch(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (r.status === 401) { showLoginScreen(); throw Object.assign(new Error('unauthenticated'), { silent: true }); }
+  return r;
+}
+
+// ── Login screen ──────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  $('loginScreen').style.display = 'flex';
+  $('loginUser').value = ''; $('loginPass').value = '';
+  $('loginError').textContent = ''; $('loginError').classList.remove('show');
+  setTimeout(() => $('loginUser').focus(), 50);
+}
+function hideLoginScreen() { $('loginScreen').style.display = 'none'; }
+function showLoginError(msg) { const el = $('loginError'); el.textContent = msg; el.classList.add('show'); }
+
+async function doLogin() {
+  const username = $('loginUser').value.trim();
+  const password = $('loginPass').value;
+  if (!username || !password) { showLoginError('Username and password required'); return; }
+  $('btnLogin').disabled = true;
+  try {
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
+    if (r.ok) { currentUser = await r.json(); hideLoginScreen(); initApp(); }
+    else { const d = await r.json().catch(() => ({})); showLoginError(d.detail || 'Login failed'); }
+  } catch (e) { showLoginError('Connection error'); }
+  finally { $('btnLogin').disabled = false; }
+}
+
+$('btnLogin').addEventListener('click', doLogin);
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPass').focus(); });
+
+// ── App initialisation ────────────────────────────────────────────────────────
+function initApp() {
+  $('hdrUsername').textContent = currentUser.username;
+  $('btnAdminPanel').style.display = currentUser.is_admin ? '' : 'none';
+  loadSessions();
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+$('btnLogout').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  [...Object.keys(tabs)].forEach(id => closeTab(parseInt(id)));
+  sessions = []; currentUser = null;
   renderSidebar();
+  $('btnAdminPanel').style.display = 'none';
+  $('hdrUsername').textContent = '';
+  showLoginScreen();
+});
+
+// ── Change Password ───────────────────────────────────────────────────────────
+$('btnChangePass').addEventListener('click', () => {
+  ['cpCurrent','cpNew','cpConfirm'].forEach(id => $(id).value = '');
+  $('cpError').textContent = '';
+  $('overlayCP').classList.add('show');
+  $('cpCurrent').focus();
+});
+$('btnCancelCP').addEventListener('click', () => $('overlayCP').classList.remove('show'));
+$('overlayCP').addEventListener('click', e => { if (e.target === $('overlayCP')) $('overlayCP').classList.remove('show'); });
+
+$('btnSaveCP').addEventListener('click', async () => {
+  const current_password = $('cpCurrent').value;
+  const new_password = $('cpNew').value;
+  const confirm = $('cpConfirm').value;
+  $('cpError').textContent = '';
+  if (!current_password || !new_password) { $('cpError').textContent = 'All fields required'; return; }
+  if (new_password !== confirm) { $('cpError').textContent = 'New passwords do not match'; return; }
+  if (new_password.length < 6) { $('cpError').textContent = 'Minimum 6 characters'; return; }
+  try {
+    const r = await apiFetch('/api/auth/password', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ current_password, new_password }) });
+    if (r.ok) { $('overlayCP').classList.remove('show'); setStatus('Password changed', 's-ok'); }
+    else { const d = await r.json().catch(() => ({})); $('cpError').textContent = d.detail || 'Failed'; }
+  } catch (e) { if (!e.silent) $('cpError').textContent = 'Connection error'; }
+});
+
+// ── Admin Users Panel ─────────────────────────────────────────────────────────
+$('btnAdminPanel').addEventListener('click', () => {
+  ['adminNewUser','adminNewPass'].forEach(id => $(id).value = '');
+  $('adminIsAdmin').checked = false; $('adminError').textContent = '';
+  $('overlayAdmin').classList.add('show');
+  loadAdminUsers();
+});
+$('btnCancelAdmin').addEventListener('click', () => $('overlayAdmin').classList.remove('show'));
+$('overlayAdmin').addEventListener('click', e => { if (e.target === $('overlayAdmin')) $('overlayAdmin').classList.remove('show'); });
+
+async function loadAdminUsers() {
+  const list = $('adminUserList');
+  list.innerHTML = '<div class="sftp-msg">Loading…</div>';
+  try {
+    const r = await apiFetch('/api/admin/users');
+    if (!r.ok) { list.innerHTML = '<div class="sftp-msg err">Failed to load</div>'; return; }
+    const users = await r.json();
+    if (!users.length) { list.innerHTML = '<div class="sftp-msg">No users</div>'; return; }
+    list.innerHTML = '';
+    users.forEach(u => {
+      const row = document.createElement('div');
+      row.className = 'admin-user-row';
+      const isSelf = currentUser && u.id === currentUser.id;
+      row.innerHTML = `<span class="aur-name">${esc(u.username)}</span>${u.is_admin ? '<span class="aur-badge">admin</span>' : ''}<span class="aur-date">${esc((u.created_at||'').slice(0,10))}</span>${isSelf ? '<span class="aur-you">(you)</span>' : `<button class="btn-xs bx-delete" data-uid="${u.id}" data-uname="${esc(u.username)}">Delete</button>`}`;
+      list.appendChild(row);
+    });
+    list.querySelectorAll('.bx-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Delete user "${btn.dataset.uname}"?\nThis will also delete all their saved sessions.`)) return;
+        try { const r = await apiFetch(`/api/admin/users/${btn.dataset.uid}`, { method: 'DELETE' }); if (r && r.ok) loadAdminUsers(); }
+        catch (e) { /* handled */ }
+      });
+    });
+  } catch (e) { if (!e.silent) list.innerHTML = '<div class="sftp-msg err">Connection error</div>'; }
+}
+
+$('btnCreateUser').addEventListener('click', async () => {
+  const username = $('adminNewUser').value.trim();
+  const password = $('adminNewPass').value;
+  const is_admin = $('adminIsAdmin').checked;
+  $('adminError').textContent = '';
+  if (!username || !password) { $('adminError').textContent = 'Username and password required'; return; }
+  try {
+    const r = await apiFetch('/api/admin/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, is_admin }) });
+    if (r.ok) { $('adminNewUser').value = ''; $('adminNewPass').value = ''; $('adminIsAdmin').checked = false; loadAdminUsers(); }
+    else { const d = await r.json().catch(() => ({})); $('adminError').textContent = d.detail || 'Failed'; }
+  } catch (e) { if (!e.silent) $('adminError').textContent = 'Connection error'; }
+});
+
+// ── Session CRUD ──────────────────────────────────────────────────────────────
+async function loadSessions() {
+  try { const r = await apiFetch('/api/sessions'); sessions = await r.json(); renderSidebar(); }
+  catch (e) { /* handled */ }
+}
+
+function sessionCardHTML(s) {
+  const isSSH = (s.type || 'ssh') === 'ssh';
+  return `
+    <div class="session-card">
+      <div class="s-name" title="${esc(s.name)}">${esc(s.name)}${!isSSH ? ' <span class="s-type">TELNET</span>' : ''}</div>
+      <div class="s-host">${isSSH ? `${esc(s.username)}@` : ''}${esc(s.host)}:${s.port}</div>
+      ${s.description ? `<div class="s-desc">${esc(s.description)}</div>` : ''}
+      <div class="s-actions">
+        <button class="btn-xs bx-connect" data-id="${s.id}" data-name="${esc(s.name)}">▶ Connect</button>
+        <button class="btn-xs bx-edit"    data-id="${s.id}">Edit</button>
+        <button class="btn-xs bx-delete"  data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>
+      </div>
+    </div>`;
 }
 
 function renderSidebar() {
@@ -603,24 +610,41 @@ function renderSidebar() {
     list.innerHTML = '<div class="session-empty">No sessions yet.<br/>Click <strong>+</strong> to add one.</div>';
     return;
   }
+  const grouped = {}, ungrouped = [];
+  sessions.forEach(s => s.folder ? (grouped[s.folder] = grouped[s.folder] || [], grouped[s.folder].push(s)) : ungrouped.push(s));
   list.innerHTML = '';
-  sessions.forEach(s => {
-    const card = document.createElement('div');
-    card.className = 'session-card';
-    card.innerHTML = `
-      <div class="s-name" title="${esc(s.name)}">${esc(s.name)}</div>
-      <div class="s-host">${esc(s.username)}@${esc(s.host)}:${s.port}</div>
-      ${s.description ? `<div class="s-desc">${esc(s.description)}</div>` : ''}
-      <div class="s-actions">
-        <button class="btn-xs bx-connect" data-id="${s.id}" data-name="${esc(s.name)}">▶ Connect</button>
-        <button class="btn-xs bx-edit"    data-id="${s.id}">Edit</button>
-        <button class="btn-xs bx-delete"  data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>
+
+  Object.keys(grouped).sort().forEach(folder => {
+    const isOpen = folderState[folder] !== false;
+    const grp = document.createElement('div');
+    grp.className = 'folder-group';
+    grp.innerHTML = `
+      <div class="folder-hdr" data-folder="${esc(folder)}">
+        <span class="folder-arrow">${isOpen ? '▾' : '▸'}</span>
+        <span class="folder-icon">📁</span>
+        <span class="folder-name">${esc(folder)}</span>
+        <span class="folder-count">${grouped[folder].length}</span>
+      </div>
+      <div class="folder-sessions"${isOpen ? '' : ' style="display:none"'}>
+        ${grouped[folder].map(sessionCardHTML).join('')}
       </div>`;
-    list.appendChild(card);
+    list.appendChild(grp);
   });
+  ungrouped.forEach(s => list.insertAdjacentHTML('beforeend', sessionCardHTML(s)));
 }
 
 $('sessionList').addEventListener('click', e => {
+  const hdr = e.target.closest('.folder-hdr');
+  if (hdr) {
+    const folder = hdr.dataset.folder;
+    const sessions_el = hdr.nextElementSibling;
+    const arrow = hdr.querySelector('.folder-arrow');
+    const isOpen = sessions_el.style.display !== 'none';
+    folderState[folder] = !isOpen;
+    sessions_el.style.display = isOpen ? 'none' : '';
+    arrow.textContent = isOpen ? '▸' : '▾';
+    return;
+  }
   const btn = e.target.closest('button[data-id]');
   if (!btn) return;
   const id = parseInt(btn.dataset.id);
@@ -631,8 +655,8 @@ $('sessionList').addEventListener('click', e => {
 
 async function deleteSession(id, name) {
   if (!confirm(`Delete session "${name}"?`)) return;
-  await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
-  loadSessions();
+  try { await apiFetch(`/api/sessions/${id}`, { method: 'DELETE' }); loadSessions(); }
+  catch (e) { /* handled */ }
 }
 
 // ── Session Modal ─────────────────────────────────────────────────────────────
@@ -643,74 +667,201 @@ function switchAuthTab(tab) {
 }
 document.querySelectorAll('.auth-tab').forEach(el => el.addEventListener('click', () => switchAuthTab(el.dataset.tab)));
 
+function switchSessionType(type) {
+  document.querySelectorAll('.type-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  const isSSH = type === 'ssh';
+  $('authSection').style.display = isSSH ? '' : 'none';
+  $('fUserRow').style.display    = isSSH ? '' : 'none';
+  const port = parseInt($('fPort').value);
+  if (!isSSH && port === 22) $('fPort').value = '23';
+  if (isSSH  && port === 23) $('fPort').value = '22';
+}
+document.querySelectorAll('.type-tab').forEach(t => t.addEventListener('click', () => switchSessionType(t.dataset.type)));
+
+function populateFolderSuggestions() {
+  const folders = [...new Set(sessions.map(s => s.folder).filter(Boolean))].sort();
+  $('folderSuggestions').innerHTML = folders.map(f => `<option value="${esc(f)}">`).join('');
+}
+
 function closeModal() { $('overlay').classList.remove('show'); }
 $('btnCancel').addEventListener('click', closeModal);
 $('overlay').addEventListener('click', e => { if (e.target === $('overlay')) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    $('overlayCP').classList.remove('show');
+    $('overlayAdmin').classList.remove('show');
+  }
+});
 
 $('btnAdd').addEventListener('click', () => {
   editingId = null;
-  ['fName','fHost','fUser','fPassword','fKey','fDesc'].forEach(id => { $(id).value = ''; });
+  ['fName','fHost','fUser','fPassword','fKey','fDesc','fFolder'].forEach(id => $(id).value = '');
   $('fPort').value = '22';
   switchAuthTab('password');
+  switchSessionType('ssh');
+  populateFolderSuggestions();
   $('modalTitle').textContent = 'New Session';
   $('overlay').classList.add('show');
   $('fName').focus();
 });
 
 async function openEditModal(id) {
-  const r = await fetch(`/api/sessions/${id}`);
-  if (!r.ok) return;
-  const s = await r.json();
-  editingId = id;
-  $('fName').value = s.name; $('fHost').value = s.host; $('fPort').value = s.port;
-  $('fUser').value = s.username; $('fPassword').value = s.password || '';
-  $('fKey').value = s.private_key || ''; $('fDesc').value = s.description || '';
-  switchAuthTab((s.private_key || '').trim() ? 'key' : 'password');
-  $('modalTitle').textContent = 'Edit Session';
-  $('overlay').classList.add('show');
+  try {
+    const r = await apiFetch(`/api/sessions/${id}`);
+    if (!r.ok) return;
+    const s = await r.json();
+    editingId = id;
+    $('fName').value = s.name; $('fHost').value = s.host; $('fPort').value = s.port;
+    $('fUser').value = s.username || ''; $('fPassword').value = s.password || '';
+    $('fKey').value = s.private_key || ''; $('fDesc').value = s.description || '';
+    $('fFolder').value = s.folder || '';
+    switchSessionType(s.type || 'ssh');
+    switchAuthTab((s.private_key || '').trim() ? 'key' : 'password');
+    populateFolderSuggestions();
+    $('modalTitle').textContent = 'Edit Session';
+    $('overlay').classList.add('show');
+  } catch (e) { /* handled */ }
 }
 
 $('btnSave').addEventListener('click', async () => {
+  const type = document.querySelector('.type-tab.active').dataset.type;
   const payload = {
     name: $('fName').value.trim(), host: $('fHost').value.trim(),
-    port: parseInt($('fPort').value) || 22, username: $('fUser').value.trim(),
-    password: $('fPassword').value, private_key: $('fKey').value.trim(),
-    description: $('fDesc').value.trim(),
+    port: parseInt($('fPort').value) || 22,
+    username: $('fUser').value.trim(), password: $('fPassword').value,
+    private_key: $('fKey').value.trim(), description: $('fDesc').value.trim(),
+    type, folder: $('fFolder').value.trim(),
   };
-  if (!payload.name || !payload.host || !payload.username) {
-    alert('Name, Host and Username are required.'); return;
-  }
+  if (!payload.name || !payload.host) { alert('Name and Host are required.'); return; }
+  if (type === 'ssh' && !payload.username) { alert('Username is required for SSH.'); return; }
   const url    = editingId ? `/api/sessions/${editingId}` : '/api/sessions';
   const method = editingId ? 'PUT' : 'POST';
-  const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  if (!r.ok) { alert('Failed to save.'); return; }
-  closeModal();
-  loadSessions();
+  try {
+    const r = await apiFetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!r.ok) { alert('Failed to save.'); return; }
+    closeModal(); loadSessions();
+  } catch (e) { /* handled */ }
 });
+
+// ── Terminal search ───────────────────────────────────────────────────────────
+function toggleSearch(tabId) {
+  const bar = $(`tsearch-${tabId}`);
+  if (!bar) return;
+  if (!bar.classList.contains('show')) {
+    bar.classList.add('show');
+    $(`tsi-${tabId}`).focus();
+    $(`tsi-${tabId}`).select();
+  } else {
+    hideSearch(tabId);
+  }
+}
+function hideSearch(tabId) {
+  const bar = $(`tsearch-${tabId}`);
+  if (bar) bar.classList.remove('show');
+  const t = tabs[tabId];
+  if (t) t.term.focus();
+}
+function doSearch(tabId, forward = true) {
+  const t = tabs[tabId];
+  if (!t || !t.searchAddon) return;
+  const query = $(`tsi-${tabId}`).value;
+  const cntEl = $(`tsc-${tabId}`);
+  if (!query) { if (cntEl) cntEl.textContent = ''; return; }
+  const found = forward
+    ? t.searchAddon.findNext(query, { caseSensitive: false })
+    : t.searchAddon.findPrevious(query, { caseSensitive: false });
+  if (cntEl) cntEl.textContent = found ? '' : 'Not found';
+}
+
+// ── WebSocket open / reconnect ────────────────────────────────────────────────
+function openWebSocket(tabId) {
+  const t = tabs[tabId];
+  if (!t) return;
+
+  // Dispose previous onData listener to prevent duplicate handlers on reconnect
+  if (t.inputDisposable) { t.inputDisposable.dispose(); t.inputDisposable = null; }
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal/${t.sessionId}`);
+  t.ws = ws;
+
+  ws.onmessage = ({ data }) => {
+    let msg; try { msg = JSON.parse(data); } catch { return; }
+    if (msg.type === 'output') {
+      t.term.write(msg.data);
+    } else if (msg.type === 'connected') {
+      t.reconnectAttempts = 0;
+      setStatus(`Connected to ${t.name}`, 's-ok');
+      setDot(tabId, 'ok');
+      sendResize(tabId);
+    } else if (msg.type === 'disconnected') {
+      t.term.writeln('\r\n\x1b[33mSession ended.\x1b[0m');
+      setStatus('Disconnected'); setDot(tabId, 'err');
+    } else if (msg.type === 'error') {
+      t.term.writeln(`\r\n\x1b[31mError: ${msg.data}\x1b[0m`);
+      setStatus(`Error — ${msg.data}`, 's-err'); setDot(tabId, 'err');
+    }
+  };
+
+  ws.onerror = () => { t.term.writeln('\r\n\x1b[31mWebSocket error.\x1b[0m'); setDot(tabId, 'err'); };
+
+  ws.onclose = evt => {
+    if (!tabs[tabId]) return;
+    if (evt.code === 4401) {
+      t.term.writeln('\r\n\x1b[31mSession expired. Please log in again.\x1b[0m');
+      showLoginScreen(); return;
+    }
+    t.term.writeln('\r\n\x1b[90mConnection closed.\x1b[0m');
+    setDot(tabId, 'err');
+    // Auto-reconnect with exponential backoff (max 5 attempts)
+    if (t.autoReconnect && t.reconnectAttempts < 5) {
+      const delay = Math.min(1000 * Math.pow(2, t.reconnectAttempts), 30000);
+      t.reconnectAttempts++;
+      t.term.writeln(`\x1b[33mReconnecting in ${delay / 1000}s (attempt ${t.reconnectAttempts}/5)…\x1b[0m`);
+      t.reconnectTimer = setTimeout(() => {
+        if (tabs[tabId]) { t.term.writeln('\x1b[36mConnecting…\x1b[0m'); openWebSocket(tabId); }
+      }, delay);
+    } else if (t.autoReconnect) {
+      t.term.writeln('\x1b[31mMax reconnect attempts reached.\x1b[0m');
+    }
+  };
+
+  t.inputDisposable = t.term.onData(data => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
+  });
+}
 
 // ── Terminal connect ──────────────────────────────────────────────────────────
 function connectSession(sessionId, sessionName) {
   const tabId = ++tabSeq;
 
-  // Outer pane = flex row (SFTP panel | xterm wrapper)
   const pane = document.createElement('div');
   pane.className = 'term-pane';
   pane.id = `pane-${tabId}`;
 
-  // SFTP panel (initially hidden)
   const sftpPanel = buildSftpPanel(tabId, sessionId);
   pane.appendChild(sftpPanel);
 
-  // xterm wrapper
+  // xterm wrapper (position:relative so search bar can float inside)
   const xtermWrapper = document.createElement('div');
   xtermWrapper.className = 'xterm-wrapper';
-  xtermWrapper.id = `xterm-${tabId}`;
-  pane.appendChild(xtermWrapper);
+
+  // Floating search bar
+  const searchBar = document.createElement('div');
+  searchBar.className = 'term-search';
+  searchBar.id = `tsearch-${tabId}`;
+  searchBar.innerHTML = `
+    <input type="text"  class="tsearch-input" id="tsi-${tabId}" placeholder="Search terminal…" />
+    <span class="tsearch-cnt" id="tsc-${tabId}"></span>
+    <button class="tsearch-btn" id="tsp-${tabId}" title="Previous (Shift+Enter)">▲</button>
+    <button class="tsearch-btn" id="tsn-${tabId}" title="Next (Enter)">▼</button>
+    <button class="tsearch-btn" id="tsx-${tabId}" title="Close (Esc)">✕</button>`;
+  xtermWrapper.appendChild(searchBar);
 
   $('termContainer').appendChild(pane);
+  pane.appendChild(xtermWrapper);
 
-  // Create xterm
   const term = new Terminal({
     theme: {
       background: '#0d1117', foreground: '#c9d1d9', cursor: '#58a6ff',
@@ -724,12 +875,31 @@ function connectSession(sessionId, sessionName) {
     fontFamily: '"Cascadia Code","Fira Code","JetBrains Mono","Courier New",monospace',
     fontSize: 14, lineHeight: 1.2, cursorBlink: true, scrollback: 10000,
   });
-  const fit = new FitAddon.FitAddon();
+  const fit        = new FitAddon.FitAddon();
+  const searchAddon = new SearchAddon.SearchAddon();
   term.loadAddon(fit);
+  term.loadAddon(searchAddon);
   term.open(xtermWrapper);
   setTimeout(() => fit.fit(), 60);
 
-  // Create tab
+  // Intercept Ctrl+F for in-terminal search
+  term.attachCustomKeyEventHandler(e => {
+    if (e.type === 'keydown' && e.ctrlKey && e.key === 'f') { toggleSearch(tabId); return false; }
+    return true;
+  });
+
+  // Wire search bar events
+  searchBar.querySelector(`#tsp-${tabId}`).addEventListener('click', () => doSearch(tabId, false));
+  searchBar.querySelector(`#tsn-${tabId}`).addEventListener('click', () => doSearch(tabId, true));
+  searchBar.querySelector(`#tsx-${tabId}`).addEventListener('click', () => hideSearch(tabId));
+  const searchInput = searchBar.querySelector(`#tsi-${tabId}`);
+  searchInput.addEventListener('input', () => doSearch(tabId, true));
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { doSearch(tabId, !e.shiftKey); e.preventDefault(); }
+    if (e.key === 'Escape') { hideSearch(tabId); e.preventDefault(); }
+  });
+
+  // Build tab element
   const tabEl = document.createElement('div');
   tabEl.className = 'tab';
   tabEl.id = `tab-${tabId}`;
@@ -738,59 +908,26 @@ function connectSession(sessionId, sessionName) {
     <span class="tab-name">${esc(sessionName)}</span>
     <button class="sftp-tog" id="stog-${tabId}" title="Toggle SFTP panel">SFTP</button>
     <button class="close" title="Close">×</button>`;
-  tabEl.querySelector('.sftp-tog').addEventListener('click', e => {
-    e.stopPropagation();
-    toggleSftp(tabId);
-  });
-  tabEl.querySelector('.close').addEventListener('click', e => {
-    e.stopPropagation();
-    closeTab(tabId);
-  });
+  tabEl.querySelector('.sftp-tog').addEventListener('click', e => { e.stopPropagation(); toggleSftp(tabId); });
+  tabEl.querySelector('.close').addEventListener('click', e => { e.stopPropagation(); closeTab(tabId); });
   tabEl.addEventListener('click', () => activateTab(tabId));
   $('tabBar').appendChild(tabEl);
 
   tabs[tabId] = {
     sessionId, name: sessionName,
-    term, ws: null, fit, pane, tabEl, xtermWrapper,
+    term, ws: null, fit, searchAddon, pane, tabEl, xtermWrapper,
     sftp: { visible: false, path: '/' },
+    autoReconnect: true, reconnectAttempts: 0, reconnectTimer: null, inputDisposable: null,
   };
 
   activateTab(tabId);
 
-  // Resize observer on xtermWrapper (detects SFTP panel toggle + window resize)
-  const ro = new ResizeObserver(() => {
-    if (tabs[tabId]) { fit.fit(); sendResize(tabId); }
-  });
+  const ro = new ResizeObserver(() => { if (tabs[tabId]) { fit.fit(); sendResize(tabId); } });
   ro.observe(xtermWrapper);
   tabs[tabId].ro = ro;
 
-  // WebSocket
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal/${sessionId}`);
-  tabs[tabId].ws = ws;
-
   term.writeln(`\x1b[36mConnecting to \x1b[1m${sessionName}\x1b[22m…\x1b[0m`);
-
-  ws.onmessage = ({ data }) => {
-    let msg; try { msg = JSON.parse(data); } catch { return; }
-    if (msg.type === 'output') {
-      term.write(msg.data);
-    } else if (msg.type === 'connected') {
-      setStatus(`Connected to ${sessionName}`, 's-ok');
-      setDot(tabId, 'ok');
-      sendResize(tabId);
-    } else if (msg.type === 'disconnected') {
-      term.writeln('\r\n\x1b[33mSession ended.\x1b[0m');
-      setStatus('Disconnected'); setDot(tabId, 'err');
-    } else if (msg.type === 'error') {
-      term.writeln(`\r\n\x1b[31mError: ${msg.data}\x1b[0m`);
-      setStatus(`Error — ${msg.data}`, 's-err'); setDot(tabId, 'err');
-    }
-  };
-  ws.onerror = () => { term.writeln('\r\n\x1b[31mWebSocket error.\x1b[0m'); setDot(tabId, 'err'); };
-  ws.onclose = () => { if (tabs[tabId]) { term.writeln('\r\n\x1b[90mConnection closed.\x1b[0m'); setDot(tabId, 'err'); } };
-
-  term.onData(data => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data })); });
+  openWebSocket(tabId);
 }
 
 function sendResize(tabId) {
@@ -805,10 +942,7 @@ function setDot(tabId, state) {
 }
 
 function activateTab(tabId) {
-  Object.values(tabs).forEach(t => {
-    t.tabEl.classList.remove('active');
-    t.pane.classList.remove('active');
-  });
+  Object.values(tabs).forEach(t => { t.tabEl.classList.remove('active'); t.pane.classList.remove('active'); });
   const t = tabs[tabId];
   if (!t) return;
   t.tabEl.classList.add('active');
@@ -821,6 +955,9 @@ function activateTab(tabId) {
 function closeTab(tabId) {
   const t = tabs[tabId];
   if (!t) return;
+  t.autoReconnect = false;                            // stop any pending reconnect
+  if (t.reconnectTimer) clearTimeout(t.reconnectTimer);
+  if (t.inputDisposable) t.inputDisposable.dispose();
   if (t.ws) t.ws.close();
   if (t.ro) t.ro.disconnect();
   t.term.dispose();
@@ -828,12 +965,8 @@ function closeTab(tabId) {
   t.pane.remove();
   delete tabs[tabId];
   const ids = Object.keys(tabs);
-  if (ids.length) {
-    activateTab(parseInt(ids[ids.length - 1]));
-  } else {
-    $('welcome').style.display = '';
-    setStatus('Ready');
-  }
+  if (ids.length) { activateTab(parseInt(ids[ids.length - 1])); }
+  else { $('welcome').style.display = ''; setStatus('Ready'); }
 }
 
 // ── SFTP Panel builder ────────────────────────────────────────────────────────
@@ -841,36 +974,23 @@ function buildSftpPanel(tabId, sessionId) {
   const panel = document.createElement('div');
   panel.className = 'sftp-panel';
   panel.id = `sftp-panel-${tabId}`;
-
   panel.innerHTML = `
     <div class="sftp-toolbar">
       <span class="sftp-path-lbl" id="sftp-path-${tabId}">/</span>
-      <button class="stb" id="sftp-up-btn-${tabId}" title="Upload files (or drag & drop)">⬆ Upload</button>
-      <button class="stb" title="New folder" id="sftp-mkdir-btn-${tabId}">📁+</button>
-      <button class="stb" title="Refresh" id="sftp-ref-btn-${tabId}">⟳</button>
+      <button class="stb" id="sftp-up-btn-${tabId}" title="Upload files">⬆ Upload</button>
+      <button class="stb" id="sftp-mkdir-btn-${tabId}" title="New folder">📁+</button>
+      <button class="stb" id="sftp-ref-btn-${tabId}"  title="Refresh">⟳</button>
       <input type="file" id="sftp-input-${tabId}" style="display:none" multiple />
     </div>
-    <div class="sftp-bc" id="sftp-bc-${tabId}"></div>
+    <div class="sftp-bc"    id="sftp-bc-${tabId}"></div>
     <div class="sftp-files" id="sftp-files-${tabId}">
       <div class="sftp-msg">Toggle SFTP to load the remote filesystem</div>
     </div>`;
-
-  // Toolbar button wiring
   panel.querySelector(`#sftp-ref-btn-${tabId}`).addEventListener('click', () => sftpLoad(tabId));
   panel.querySelector(`#sftp-mkdir-btn-${tabId}`).addEventListener('click', () => sftpMkdirPrompt(tabId));
   panel.querySelector(`#sftp-up-btn-${tabId}`).addEventListener('click', () => panel.querySelector(`#sftp-input-${tabId}`).click());
-  panel.querySelector(`#sftp-input-${tabId}`).addEventListener('change', function () {
-    sftpUploadFiles(tabId, Array.from(this.files));
-    this.value = '';
-  });
-
-  // Breadcrumb click delegation
-  panel.querySelector(`#sftp-bc-${tabId}`).addEventListener('click', e => {
-    const seg = e.target.closest('[data-path]');
-    if (seg) sftpNavigate(tabId, seg.dataset.path);
-  });
-
-  // File list click delegation
+  panel.querySelector(`#sftp-input-${tabId}`).addEventListener('change', function () { sftpUploadFiles(tabId, Array.from(this.files)); this.value = ''; });
+  panel.querySelector(`#sftp-bc-${tabId}`).addEventListener('click', e => { const seg = e.target.closest('[data-path]'); if (seg) sftpNavigate(tabId, seg.dataset.path); });
   const fileList = panel.querySelector(`#sftp-files-${tabId}`);
   fileList.addEventListener('click', e => {
     const btn = e.target.closest('.sa[data-action]');
@@ -885,200 +1005,115 @@ function buildSftpPanel(tabId, sessionId) {
     const row = e.target.closest('.sftp-row.dir[data-path]');
     if (row) sftpNavigate(tabId, row.dataset.path);
   });
-
-  // Drag-and-drop upload
   fileList.addEventListener('dragover', e => { e.preventDefault(); fileList.classList.add('drag-over'); });
   fileList.addEventListener('dragleave', () => fileList.classList.remove('drag-over'));
   fileList.addEventListener('drop', e => {
-    e.preventDefault();
-    fileList.classList.remove('drag-over');
+    e.preventDefault(); fileList.classList.remove('drag-over');
     const files = Array.from(e.dataTransfer.files);
     if (files.length) sftpUploadFiles(tabId, files);
   });
-
   return panel;
 }
 
-// ── SFTP toggle ───────────────────────────────────────────────────────────────
 function toggleSftp(tabId) {
-  const t = tabs[tabId];
-  if (!t) return;
+  const t = tabs[tabId]; if (!t) return;
   t.sftp.visible = !t.sftp.visible;
-  const panel = $(`sftp-panel-${tabId}`);
-  const togBtn = $(`stog-${tabId}`);
-  panel.classList.toggle('visible', t.sftp.visible);
-  togBtn.classList.toggle('on', t.sftp.visible);
+  $(`sftp-panel-${tabId}`).classList.toggle('visible', t.sftp.visible);
+  $(`stog-${tabId}`).classList.toggle('on', t.sftp.visible);
   if (t.sftp.visible) sftpLoad(tabId);
-  // Terminal will auto-resize via ResizeObserver on xtermWrapper
 }
 
 // ── SFTP operations ───────────────────────────────────────────────────────────
 async function sftpLoad(tabId) {
-  const t = tabs[tabId];
-  if (!t) return;
+  const t = tabs[tabId]; if (!t) return;
   const filesEl = $(`sftp-files-${tabId}`);
   filesEl.innerHTML = '<div class="sftp-msg">Loading…</div>';
-
   try {
-    const r = await fetch(`/api/sftp/${t.sessionId}/ls?path=${encodeURIComponent(t.sftp.path)}`);
-    if (!r.ok) {
-      const err = await r.json();
-      filesEl.innerHTML = `<div class="sftp-msg err">Error: ${esc(err.detail)}</div>`;
-      return;
-    }
+    const r = await apiFetch(`/api/sftp/${t.sessionId}/ls?path=${encodeURIComponent(t.sftp.path)}`);
+    if (!r.ok) { const err = await r.json(); filesEl.innerHTML = `<div class="sftp-msg err">Error: ${esc(err.detail)}</div>`; return; }
     const { path, entries } = await r.json();
-    t.sftp.path = path;   // server normalised it
-    renderBreadcrumbs(tabId);
-    renderFiles(tabId, entries);
-  } catch (e) {
-    filesEl.innerHTML = `<div class="sftp-msg err">Network error: ${esc(e.message)}</div>`;
-  }
+    t.sftp.path = path;
+    renderBreadcrumbs(tabId); renderFiles(tabId, entries);
+  } catch (e) { if (!e.silent) filesEl.innerHTML = `<div class="sftp-msg err">Network error: ${esc(e.message)}</div>`; }
 }
-
-function sftpNavigate(tabId, path) {
-  if (!tabs[tabId]) return;
-  tabs[tabId].sftp.path = path;
-  sftpLoad(tabId);
-}
-
+function sftpNavigate(tabId, path) { if (!tabs[tabId]) return; tabs[tabId].sftp.path = path; sftpLoad(tabId); }
 async function sftpMkdirPrompt(tabId) {
-  const name = prompt('New folder name:');
-  if (!name) return;
+  const name = prompt('New folder name:'); if (!name) return;
   const t = tabs[tabId];
-  const path = joinPath(t.sftp.path, name);
-  const r = await fetch(`/api/sftp/${t.sessionId}/mkdir`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ path }),
-  });
-  if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; }
-  sftpLoad(tabId);
+  try { const r = await apiFetch(`/api/sftp/${t.sessionId}/mkdir`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path: joinPath(t.sftp.path, name) }) }); if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; } sftpLoad(tabId); }
+  catch (e) { /* handled */ }
 }
-
 async function sftpRenamePrompt(tabId, oldPath) {
   const oldName = oldPath.split('/').pop();
-  const newName = prompt('Rename to:', oldName);
-  if (!newName || newName === oldName) return;
+  const newName = prompt('Rename to:', oldName); if (!newName || newName === oldName) return;
   const t = tabs[tabId];
-  const newPath = joinPath(parentPath(oldPath), newName);
-  const r = await fetch(`/api/sftp/${t.sessionId}/rename`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ old_path: oldPath, new_path: newPath }),
-  });
-  if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; }
-  sftpLoad(tabId);
+  try { const r = await apiFetch(`/api/sftp/${t.sessionId}/rename`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ old_path: oldPath, new_path: joinPath(parentPath(oldPath), newName) }) }); if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; } sftpLoad(tabId); }
+  catch (e) { /* handled */ }
 }
-
 async function sftpDelete(tabId, path, isDir) {
   const name = path.split('/').pop();
-  const msg = isDir
-    ? `Delete folder "${name}" and all its contents?`
-    : `Delete file "${name}"?`;
-  if (!confirm(msg)) return;
+  if (!confirm(isDir ? `Delete folder "${name}" and all its contents?` : `Delete file "${name}"?`)) return;
   const t = tabs[tabId];
-  const r = await fetch(`/api/sftp/${t.sessionId}/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
-  if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; }
-  sftpLoad(tabId);
+  try { const r = await apiFetch(`/api/sftp/${t.sessionId}/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' }); if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; } sftpLoad(tabId); }
+  catch (e) { /* handled */ }
 }
-
 function sftpDownload(tabId, path) {
   const t = tabs[tabId];
   const a = document.createElement('a');
   a.href = `/api/sftp/${t.sessionId}/download?path=${encodeURIComponent(path)}`;
-  a.download = path.split('/').pop();
-  a.click();
+  a.download = path.split('/').pop(); a.click();
 }
-
 async function sftpUploadFiles(tabId, files) {
   const t = tabs[tabId];
   for (const file of files) {
     showToast(`Uploading ${file.name}…`);
-    const fd = new FormData();
-    fd.append('path', t.sftp.path);
-    fd.append('file', file);
-    const r = await fetch(`/api/sftp/${t.sessionId}/upload`, { method: 'POST', body: fd });
-    if (!r.ok) {
-      hideToast();
-      const e = await r.json();
-      alert(`Upload failed for "${file.name}": ${e.detail}`);
-      return;
-    }
+    const fd = new FormData(); fd.append('path', t.sftp.path); fd.append('file', file);
+    try {
+      const r = await apiFetch(`/api/sftp/${t.sessionId}/upload`, { method: 'POST', body: fd });
+      if (!r.ok) { hideToast(); const e = await r.json(); alert(`Upload failed for "${file.name}": ${e.detail}`); return; }
+    } catch (e) { hideToast(); return; }
   }
-  hideToast();
-  setStatus(`Uploaded ${files.length} file(s)`, 's-ok');
-  sftpLoad(tabId);
+  hideToast(); setStatus(`Uploaded ${files.length} file(s)`, 's-ok'); sftpLoad(tabId);
 }
 
 // ── SFTP render helpers ───────────────────────────────────────────────────────
 function renderBreadcrumbs(tabId) {
   const t = tabs[tabId];
   $(`sftp-path-${tabId}`).textContent = t.sftp.path;
-
   const parts = t.sftp.path.split('/').filter(Boolean);
-  let html = `<span class="bc-seg" data-path="/">/</span>`;
-  let cum = '';
+  let html = `<span class="bc-seg" data-path="/">/</span>`, cum = '';
   parts.forEach((p, i) => {
     cum += '/' + p;
-    const isLast = i === parts.length - 1;
-    html += isLast
+    html += i === parts.length - 1
       ? `<span class="bc-sep">/</span><span class="bc-last">${esc(p)}</span>`
       : `<span class="bc-sep">/</span><span class="bc-seg" data-path="${esc(cum)}">${esc(p)}</span>`;
   });
   $(`sftp-bc-${tabId}`).innerHTML = html;
 }
-
 function renderFiles(tabId, entries) {
   const t = tabs[tabId];
   const container = $(`sftp-files-${tabId}`);
-
-  if (!entries.length && t.sftp.path === '/') {
-    container.innerHTML = '<div class="sftp-msg">Empty directory</div>';
-    return;
-  }
-
+  if (!entries.length && t.sftp.path === '/') { container.innerHTML = '<div class="sftp-msg">Empty directory</div>'; return; }
   let html = '';
-
-  // Parent dir ".." row
   if (t.sftp.path !== '/') {
     const pp = JSON.stringify(parentPath(t.sftp.path));
-    html += `
-      <div class="sftp-row dir" data-path=${pp}>
-        <span class="sr-icon">📁</span>
-        <span class="sr-name" style="color:var(--muted)">..</span>
-        <span class="sr-size"></span>
-        <div class="sr-actions"></div>
-      </div>`;
+    html += `<div class="sftp-row dir" data-path=${pp}><span class="sr-icon">📁</span><span class="sr-name" style="color:var(--muted)">..</span><span class="sr-size"></span><div class="sr-actions"></div></div>`;
   }
-
   for (const e of entries) {
-    const isDir  = e.type === 'dir';
-    const icon   = isDir ? '📁' : fileIcon(e.name);
-    const size   = isDir ? '' : fmtSize(e.size);
-    const fp     = JSON.stringify(joinPath(t.sftp.path, e.name));
-    const isdirJ = JSON.stringify(isDir);
-
-    const dlBtn = isDir ? '' :
-      `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`;
-
-    html += `
-      <div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}>
-        <span class="sr-icon">${icon}</span>
-        <span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span>
-        <span class="sr-size">${size}</span>
-        <div class="sr-actions">
-          ${dlBtn}
-          <button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button>
-          <button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button>
-        </div>
-      </div>`;
+    const isDir = e.type === 'dir', icon = isDir ? '📁' : fileIcon(e.name), size = isDir ? '' : fmtSize(e.size);
+    const fp = JSON.stringify(joinPath(t.sftp.path, e.name)), isdirJ = JSON.stringify(isDir);
+    html += `<div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}><span class="sr-icon">${icon}</span><span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span><span class="sr-size">${size}</span><div class="sr-actions">${isDir ? '' : `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`}<button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button><button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button></div></div>`;
   }
-
   container.innerHTML = html || '<div class="sftp-msg">Empty directory</div>';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-loadSessions();
+(async () => {
+  try {
+    const r = await fetch('/api/auth/me');
+    if (r.ok) { currentUser = await r.json(); hideLoginScreen(); initApp(); return; }
+  } catch (_) { /* network error — fall through to login */ }
+})();
 </script>
 </body>
 </html>
