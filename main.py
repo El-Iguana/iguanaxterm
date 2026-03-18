@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import asyncio
 import io
 import json
@@ -817,4 +818,14 @@ async def terminal_ws(websocket: WebSocket, session_id: int):
 
 
 if __name__ == "__main__":
+    print(r"""
+  ___                               __  __
+ |_ _|__ _ _  _  __ _ _ _  __ _   \ \/ /_ ______ _ __
+  | |/ _` | || |/ _` | ' \/ _` |   >  <  / -_) '_| '  \
+ |___\__, |\_,_|\__,_|_||_\__,_|  /_/\_\\___|_| |_|_|_|
+        |_|
+  Browser-based SSH/Telnet Terminal Manager
+  Developer : OldManGan <eliguana@protonmail.com>
+  Port      : 8765
+    """, flush=True)
     uvicorn.run("main:app", host="0.0.0.0", port=8765, reload=False)
