@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+VERSION = "0.1.0"
+
 import asyncio
 import io
 import json
@@ -818,13 +820,14 @@ async def terminal_ws(websocket: WebSocket, session_id: int):
 
 
 if __name__ == "__main__":
-    print(r"""
+    print(f"""
   ___                               __  __
- |_ _|__ _ _  _  __ _ _ _  __ _   \ \/ /_ ______ _ __
-  | |/ _` | || |/ _` | ' \/ _` |   >  <  / -_) '_| '  \
- |___\__, |\_,_|\__,_|_||_\__,_|  /_/\_\\___|_| |_|_|_|
+ |_ _|__ _ _  _  __ _ _ _  __ _   \\ \\/ /_ ______ _ __
+  | |/ _` | || |/ _` | ' \\/ _` |   >  <  / -_) '_| '  \\
+ |___\\__, |\\_,_|\\__,_|_||_\\__,_|  /_/\\_\\\\___|_| |_|_|_|
         |_|
   Browser-based SSH/Telnet Terminal Manager
+  Version   : {VERSION}
   Developer : OldManGan <eliguana@protonmail.com>
   Port      : 8765
     """, flush=True)

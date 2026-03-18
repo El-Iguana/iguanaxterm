@@ -25,24 +25,34 @@ A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your r
 | Telnet | asyncio + IAC parser |
 | Auth | bcrypt + Redis sessions |
 | Frontend | xterm.js 5.3.0, vanilla JS/CSS |
-| Deployment | Podman + podman-compose |
+| Deployment | Podman or Docker |
 
-## Quick Start (Podman)
-
-**Prerequisites:** `podman` and `podman-compose` (or `docker-compose`)
+## Quick Start
 
 ```bash
-git clone https://github.com/El-Iguana/ganxterm.git
-cd ganxterm
+git clone https://github.com/El-Iguana/iguanaxterm.git
+cd iguanaxterm
 
 # Optional: copy and edit environment overrides
 cp .env.example .env
+```
 
-# Build and start
+### Podman
+
+**Prerequisites:** `podman` and `podman-compose`
+
+```bash
 podman compose build --no-cache && podman compose up -d
-
-# View logs
 podman compose logs -f
+```
+
+### Docker
+
+**Prerequisites:** `docker` and `docker compose`
+
+```bash
+docker compose -f docker-compose.yaml build --no-cache && docker compose -f docker-compose.yaml up -d
+docker compose -f docker-compose.yaml logs -f
 ```
 
 Open [http://localhost:8765](http://localhost:8765) and log in with `admin` / `changeme` (change this immediately).
@@ -81,3 +91,8 @@ SSH passwords are stored in plaintext in the SQLite database. Keep the `ganxterm
 - Change the default admin password immediately after first login
 - Run behind a reverse proxy with TLS (nginx, Caddy, etc.) — the app itself does not terminate SSL
 - The `ganx_session` cookie is HttpOnly and `SameSite=lax`
+
+## Roadmap
+
+- **Encrypted credential storage** — SSH passwords are currently stored in plaintext in the SQLite database; planned replacement with encrypted-at-rest storage
+- **Login rate limiting** — brute-force protection on the `/api/auth/login` endpoint
