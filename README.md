@@ -17,6 +17,8 @@ A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your r
 - **SSH keepalive** — 30-second keepalive prevents idle disconnects
 - **Multi-user** — each user has their own session library; admin panel for user management
 - **Persistent login** — Redis-backed sessions with sliding TTL; refresh the page without re-logging in
+- **Encrypted credentials** — SSH passwords and private keys encrypted at rest with Fernet (AES-128)
+- **Login rate limiting** — brute-force protection on the login endpoint (10 attempts / 15 min per IP)
 
 ## Stack
 
@@ -70,6 +72,9 @@ Copy `.env.example` to `.env` and set any overrides:
 | `SESSION_TTL_HOURS` | `8` | Sliding session timeout in hours |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
 | `GANXTERM_DATA_DIR` | script dir | Directory for the SQLite database |
+| `GANXTERM_SECRET_KEY` | *(auto-generated)* | Fernet key for credential encryption; auto-generated and saved to `secret.key` on first run if not set |
+| `LOGIN_RATE_LIMIT` | `10` | Max login attempts per IP per window |
+| `LOGIN_RATE_WINDOW` | `900` | Rate limit window in seconds (default 15 min) |
 
 ## Running Locally (without containers)
 
@@ -81,20 +86,16 @@ REDIS_URL=redis://localhost:6379/0 python main.py
 
 ## Data Persistence
 
-When running via Podman, two named volumes are used:
+When running via Podman or Docker, two named volumes are used:
 
-- `ganxterm_data` — SQLite database mounted at `/data`
+- `ganxterm_data` — SQLite database and encryption key, mounted at `/data`
 - `redis_data` — Redis persistence
 
-SSH passwords are stored in plaintext in the SQLite database. Keep the `ganxterm_data` volume and any `.env` file with tight permissions.
+Keep the `ganxterm_data` volume and any `.env` file with tight permissions. If you set `GANXTERM_SECRET_KEY` via env var instead of relying on the auto-generated `secret.key` file, back it up — losing it means stored credentials cannot be decrypted.
 
 ## Security Notes
 
 - Change the default admin password immediately after first login
 - Run behind a reverse proxy with TLS (nginx, Caddy, etc.) — the app itself does not terminate SSL
 - The `ganx_session` cookie is HttpOnly and `SameSite=lax`
-
-## Roadmap
-
-- **Encrypted credential storage** — SSH passwords are currently stored in plaintext in the SQLite database; planned replacement with encrypted-at-rest storage
-- **Login rate limiting** — brute-force protection on the `/api/auth/login` endpoint
+- Credentials are encrypted at rest; the encryption key lives in `secret.key` inside the `ganxterm_data` volume
