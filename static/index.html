@@ -916,7 +916,7 @@ function connectSession(sessionId, sessionName) {
   tabs[tabId] = {
     sessionId, name: sessionName,
     term, ws: null, fit, searchAddon, pane, tabEl, xtermWrapper,
-    sftp: { visible: false, path: '/' },
+    sftp: { visible: false, path: '~' },
     autoReconnect: true, reconnectAttempts: 0, reconnectTimer: null, inputDisposable: null,
   };
 
@@ -976,7 +976,7 @@ function buildSftpPanel(tabId, sessionId) {
   panel.id = `sftp-panel-${tabId}`;
   panel.innerHTML = `
     <div class="sftp-toolbar">
-      <span class="sftp-path-lbl" id="sftp-path-${tabId}">/</span>
+      <span class="sftp-path-lbl" id="sftp-path-${tabId}">~</span>
       <button class="stb" id="sftp-up-btn-${tabId}" title="Upload files">⬆ Upload</button>
       <button class="stb" id="sftp-mkdir-btn-${tabId}" title="New folder">📁+</button>
       <button class="stb" id="sftp-ref-btn-${tabId}"  title="Refresh">⟳</button>
