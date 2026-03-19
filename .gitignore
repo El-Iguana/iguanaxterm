@@ -15,6 +15,9 @@ env/
 *.db
 *.sqlite
 
+# Encryption key
+secret.key
+
 # OS
 .DS_Store
 Thumbs.db

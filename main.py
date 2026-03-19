@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 import asyncio
 import io
@@ -16,6 +16,7 @@ from pathlib import Path
 import paramiko
 import redis.asyncio as aioredis
 import uvicorn
+from cryptography.fernet import Fernet
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,38 @@ STATIC_DIR   = Path(__file__).parent / "static"
 REDIS_URL    = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 SESSION_TTL  = int(os.getenv("SESSION_TTL_HOURS", "8")) * 3600
 COOKIE_NAME  = "ganx_session"
+LOGIN_RATE_LIMIT  = int(os.getenv("LOGIN_RATE_LIMIT", "10"))   # max attempts
+LOGIN_RATE_WINDOW = int(os.getenv("LOGIN_RATE_WINDOW", "900"))  # seconds (15 min)
+
+_KEY_FILE    = _data_dir / "secret.key"
+_CRED_PREFIX = "fernet:"
+
+
+def _load_or_create_fernet() -> Fernet:
+    env_key = os.getenv("GANXTERM_SECRET_KEY", "").strip()
+    if env_key:
+        return Fernet(env_key.encode())
+    if _KEY_FILE.exists():
+        return Fernet(_KEY_FILE.read_bytes().strip())
+    key = Fernet.generate_key()
+    _KEY_FILE.write_bytes(key)
+    _KEY_FILE.chmod(0o600)
+    return Fernet(key)
+
+
+_fernet = _load_or_create_fernet()
+
+
+def _encrypt_cred(value: str) -> str:
+    if not value:
+        return value
+    return _CRED_PREFIX + _fernet.encrypt(value.encode()).decode()
+
+
+def _decrypt_cred(value: str) -> str:
+    if not value or not value.startswith(_CRED_PREFIX):
+        return value  # legacy plaintext
+    return _fernet.decrypt(value[len(_CRED_PREFIX):].encode()).decode()
 
 _sftp_pool   = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sftp")
 redis_client: aioredis.Redis | None = None
@@ -124,6 +157,20 @@ def init_db():
         "WHERE user_id IS NULL"
     )
     conn.commit()
+
+    # Migrate plaintext credentials to encrypted
+    rows = conn.execute("SELECT id, password, private_key FROM sessions").fetchall()
+    for row in rows:
+        pw = row[1] or ""
+        pk = row[2] or ""
+        new_pw = _encrypt_cred(pw) if pw and not pw.startswith(_CRED_PREFIX) else pw
+        new_pk = _encrypt_cred(pk) if pk and not pk.startswith(_CRED_PREFIX) else pk
+        if new_pw != pw or new_pk != pk:
+            conn.execute(
+                "UPDATE sessions SET password=?, private_key=? WHERE id=?",
+                (new_pw, new_pk, row[0]),
+            )
+    conn.commit()
     conn.close()
 
 
@@ -135,7 +182,10 @@ def _fetch_session(session_id: int, user_id: int) -> dict:
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    return dict(row)
+    s = dict(row)
+    s["password"]    = _decrypt_cred(s.get("password") or "")
+    s["private_key"] = _decrypt_cred(s.get("private_key") or "")
+    return s
 
 
 # ── SFTP connection manager ───────────────────────────────────────────────────
@@ -378,7 +428,15 @@ async def root():
 # ── Routes: auth ──────────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
-async def login(body: LoginIn, response: Response):
+async def login(body: LoginIn, request: Request, response: Response):
+    ip  = request.client.host if request.client else "unknown"
+    key = f"ratelimit:login:{ip}"
+    attempts = await redis_client.incr(key)
+    if attempts == 1:
+        await redis_client.expire(key, LOGIN_RATE_WINDOW)
+    if attempts > LOGIN_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many login attempts — try again later")
+
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username,)
@@ -504,8 +562,8 @@ async def create_session(session: SessionIn, user: dict = Depends(get_current_us
             "INSERT INTO sessions (user_id, name, host, port, username, password, private_key, description, type, folder) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user["id"], session.name, session.host, session.port,
-             session.username, session.password, session.private_key, session.description,
-             session.type, session.folder),
+             session.username, _encrypt_cred(session.password), _encrypt_cred(session.private_key),
+             session.description, session.type, session.folder),
         )
         new_id = cur.lastrowid
     return {"id": new_id, **session.model_dump()}
@@ -518,8 +576,8 @@ async def update_session(session_id: int, session: SessionIn, user: dict = Depen
             "UPDATE sessions SET name=?, host=?, port=?, username=?, password=?, private_key=?, "
             "description=?, type=?, folder=? WHERE id=? AND user_id=?",
             (session.name, session.host, session.port, session.username,
-             session.password, session.private_key, session.description,
-             session.type, session.folder, session_id, user["id"]),
+             _encrypt_cred(session.password), _encrypt_cred(session.private_key),
+             session.description, session.type, session.folder, session_id, user["id"]),
         )
     if cur.rowcount == 0:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -692,6 +750,8 @@ async def terminal_ws(websocket: WebSocket, session_id: int):
         return
 
     session = dict(row)
+    session["password"]    = _decrypt_cred(session.get("password") or "")
+    session["private_key"] = _decrypt_cred(session.get("private_key") or "")
 
     # ── Telnet branch ─────────────────────────────────────────────────────────
     if session.get("type", "ssh") == "telnet":
