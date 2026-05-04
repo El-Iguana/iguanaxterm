@@ -953,7 +953,7 @@ function activateTab(tabId) {
   t.tabEl.classList.add('active');
   t.pane.classList.add('active');
   $('welcome').style.display = 'none';
-  setTimeout(() => t.fit.fit(), 30);
+  setTimeout(() => { t.fit.fit(); t.term.focus(); }, 30);
   setStatus(`Connected to ${t.name}`, 's-info');
 }
 
