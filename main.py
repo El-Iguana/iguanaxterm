@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 
 import asyncio
 import io
@@ -14,10 +14,9 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 import paramiko
-import redis.asyncio as aioredis
 import uvicorn
 from cryptography.fernet import Fernet
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import bcrypt as _bcrypt
@@ -28,11 +27,6 @@ from pydantic import BaseModel
 _data_dir    = Path(os.getenv("GANXTERM_DATA_DIR", str(Path(__file__).parent)))
 DB_PATH      = _data_dir / "ganxterm.db"
 STATIC_DIR   = Path(__file__).parent / "static"
-REDIS_URL    = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-SESSION_TTL  = int(os.getenv("SESSION_TTL_HOURS", "8")) * 3600
-COOKIE_NAME  = "ganx_session"
-LOGIN_RATE_LIMIT  = int(os.getenv("LOGIN_RATE_LIMIT", "10"))   # max attempts
-LOGIN_RATE_WINDOW = int(os.getenv("LOGIN_RATE_WINDOW", "900"))  # seconds (15 min)
 
 _KEY_FILE    = _data_dir / "secret.key"
 _CRED_PREFIX = "fernet:"
@@ -64,8 +58,8 @@ def _decrypt_cred(value: str) -> str:
         return value  # legacy plaintext
     return _fernet.decrypt(value[len(_CRED_PREFIX):].encode()).decode()
 
-_sftp_pool   = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sftp")
-redis_client: aioredis.Redis | None = None
+_sftp_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="sftp")
+_sessions: dict[str, dict] = {}   # token → user payload; lives for the process lifetime
 
 
 def _hash_pw(password: str) -> str:
@@ -352,11 +346,8 @@ def _rm_recursive(sftp: paramiko.SFTPClient, path: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client
-    redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
     init_db()
     yield
-    await redis_client.aclose()
     sftp_manager.close_all()
     _sftp_pool.shutdown(wait=False)
 
@@ -402,14 +393,13 @@ class MkdirIn(BaseModel):
 # ── Auth dependencies ─────────────────────────────────────────────────────────
 
 async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get(COOKIE_NAME)
-    if not token:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    raw = await redis_client.get(f"session:{token}")
-    if not raw:
+    user = _sessions.get(auth[7:])
+    if not user:
         raise HTTPException(status_code=401, detail="Session expired")
-    await redis_client.expire(f"session:{token}", SESSION_TTL)
-    return json.loads(raw)
+    return user
 
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -428,15 +418,7 @@ async def root():
 # ── Routes: auth ──────────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
-async def login(body: LoginIn, request: Request, response: Response):
-    ip  = request.client.host if request.client else "unknown"
-    key = f"ratelimit:login:{ip}"
-    attempts = await redis_client.incr(key)
-    if attempts == 1:
-        await redis_client.expire(key, LOGIN_RATE_WINDOW)
-    if attempts > LOGIN_RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="Too many login attempts — try again later")
-
+async def login(body: LoginIn):
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username,)
@@ -444,27 +426,20 @@ async def login(body: LoginIn, request: Request, response: Response):
     if not row or not _verify_pw(body.password, row["pw_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token   = secrets.token_urlsafe(32)
-    payload = json.dumps({
+    token = secrets.token_urlsafe(32)
+    _sessions[token] = {
         "id":       row["id"],
         "username": row["username"],
         "is_admin": bool(row["is_admin"]),
-    })
-    await redis_client.setex(f"session:{token}", SESSION_TTL, payload)
-
-    response.set_cookie(
-        key=COOKIE_NAME, value=token,
-        max_age=SESSION_TTL, httponly=True, samesite="lax", path="/",
-    )
-    return {"username": row["username"], "is_admin": bool(row["is_admin"])}
+    }
+    return {"username": row["username"], "is_admin": bool(row["is_admin"]), "token": token}
 
 
 @app.post("/api/auth/logout")
-async def logout(request: Request, response: Response):
-    token = request.cookies.get(COOKIE_NAME)
-    if token:
-        await redis_client.delete(f"session:{token}")
-    response.delete_cookie(key=COOKIE_NAME, path="/")
+async def logout(request: Request):
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        _sessions.pop(auth[7:], None)
     return {"ok": True}
 
 
@@ -721,15 +696,8 @@ async def _ws_send(ws: WebSocket, msg_type: str, data: str):
 
 
 @app.websocket("/ws/terminal/{session_id}")
-async def terminal_ws(websocket: WebSocket, session_id: int):
-    # Auth check — cookies are sent automatically by the browser for same-origin WS
-    token = websocket.cookies.get(COOKIE_NAME)
-    user  = None
-    if token:
-        raw = await redis_client.get(f"session:{token}")
-        if raw:
-            await redis_client.expire(f"session:{token}", SESSION_TTL)
-            user = json.loads(raw)
+async def terminal_ws(websocket: WebSocket, session_id: int, token: str = Query("")):
+    user = _sessions.get(token) if token else None
 
     await websocket.accept()
 

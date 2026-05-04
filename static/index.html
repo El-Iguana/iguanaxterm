@@ -459,6 +459,9 @@ function fileIcon(name) {
 
 // ── Auth fetch wrapper ────────────────────────────────────────────────────────
 async function apiFetch(url, opts = {}) {
+  const token = sessionStorage.getItem('ganx_token');
+  opts.headers = Object.assign({}, opts.headers);
+  if (token) opts.headers['Authorization'] = `Bearer ${token}`;
   const r = await fetch(url, opts);
   if (r.status === 401) { showLoginScreen(); throw Object.assign(new Error('unauthenticated'), { silent: true }); }
   return r;
@@ -481,7 +484,7 @@ async function doLogin() {
   $('btnLogin').disabled = true;
   try {
     const r = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
-    if (r.ok) { currentUser = await r.json(); hideLoginScreen(); initApp(); }
+    if (r.ok) { const data = await r.json(); sessionStorage.setItem('ganx_token', data.token); currentUser = data; hideLoginScreen(); initApp(); }
     else { const d = await r.json().catch(() => ({})); showLoginError(d.detail || 'Login failed'); }
   } catch (e) { showLoginError('Connection error'); }
   finally { $('btnLogin').disabled = false; }
@@ -500,7 +503,8 @@ function initApp() {
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 $('btnLogout').addEventListener('click', async () => {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  await apiFetch('/api/auth/logout', { method: 'POST' });
+  sessionStorage.removeItem('ganx_token');
   [...Object.keys(tabs)].forEach(id => closeTab(parseInt(id)));
   sessions = []; currentUser = null;
   renderSidebar();
@@ -783,7 +787,8 @@ function openWebSocket(tabId) {
   if (t.inputDisposable) { t.inputDisposable.dispose(); t.inputDisposable = null; }
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal/${t.sessionId}`);
+  const token = sessionStorage.getItem('ganx_token') || '';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal/${t.sessionId}?token=${encodeURIComponent(token)}`);
   t.ws = ws;
 
   ws.onmessage = ({ data }) => {
@@ -1057,11 +1062,17 @@ async function sftpDelete(tabId, path, isDir) {
   try { const r = await apiFetch(`/api/sftp/${t.sessionId}/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' }); if (!r.ok) { const e = await r.json(); alert(`Failed: ${e.detail}`); return; } sftpLoad(tabId); }
   catch (e) { /* handled */ }
 }
-function sftpDownload(tabId, path) {
+async function sftpDownload(tabId, path) {
   const t = tabs[tabId];
-  const a = document.createElement('a');
-  a.href = `/api/sftp/${t.sessionId}/download?path=${encodeURIComponent(path)}`;
-  a.download = path.split('/').pop(); a.click();
+  try {
+    const r = await apiFetch(`/api/sftp/${t.sessionId}/download?path=${encodeURIComponent(path)}`);
+    if (!r.ok) { alert('Download failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = path.split('/').pop(); a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { if (!e.silent) alert('Download failed'); }
 }
 async function sftpUploadFiles(tabId, files) {
   const t = tabs[tabId];
@@ -1109,8 +1120,9 @@ function renderFiles(tabId, entries) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
+  if (!sessionStorage.getItem('ganx_token')) return;
   try {
-    const r = await fetch('/api/auth/me');
+    const r = await apiFetch('/api/auth/me');
     if (r.ok) { currentUser = await r.json(); hideLoginScreen(); initApp(); return; }
   } catch (_) { /* network error — fall through to login */ }
 })();

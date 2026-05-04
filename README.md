@@ -1,6 +1,6 @@
 # IguanaXterm
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-1.1.0-green.svg)]()
 
 A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your remote connections from a single web UI — no client software required.
 
@@ -16,9 +16,8 @@ A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your r
 - **Auto-reconnect** — exponential backoff reconnect on disconnect (up to 5 attempts)
 - **SSH keepalive** — 30-second keepalive prevents idle disconnects
 - **Multi-user** — each user has their own session library; admin panel for user management
-- **Persistent login** — Redis-backed sessions with sliding TTL; refresh the page without re-logging in
+- **Per-tab sessions** — each browser tab holds its own independent login session via `sessionStorage`
 - **Encrypted credentials** — SSH passwords and private keys encrypted at rest with Fernet (AES-128)
-- **Login rate limiting** — brute-force protection on the login endpoint (10 attempts / 15 min per IP)
 
 ## Stack
 
@@ -27,7 +26,7 @@ A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your r
 | Backend | FastAPI + Uvicorn |
 | SSH/SFTP | Paramiko |
 | Telnet | asyncio + IAC parser |
-| Auth | bcrypt + Redis sessions |
+| Auth | bcrypt + in-process token store |
 | Frontend | xterm.js 5.3.0, vanilla JS/CSS |
 | Deployment | Podman or Docker |
 
@@ -69,33 +68,27 @@ Copy `.env.example` to `.env` and set any overrides:
 |---|---|---|
 | `GANXTERM_ADMIN_USER` | `admin` | Initial admin username (first run only) |
 | `GANXTERM_ADMIN_PASS` | `changeme` | Initial admin password (first run only) |
-| `SESSION_TTL_HOURS` | `8` | Sliding session timeout in hours |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
 | `GANXTERM_DATA_DIR` | script dir | Directory for the SQLite database |
 | `GANXTERM_SECRET_KEY` | *(auto-generated)* | Fernet key for credential encryption; auto-generated and saved to `secret.key` on first run if not set |
-| `LOGIN_RATE_LIMIT` | `10` | Max login attempts per IP per window |
-| `LOGIN_RATE_WINDOW` | `900` | Rate limit window in seconds (default 15 min) |
 
 ## Running Locally (without containers)
 
 ```bash
 pip install -r requirements.txt
-# Requires a running Redis instance
-REDIS_URL=redis://localhost:6379/0 python main.py
+python main.py
 ```
 
 ## Data Persistence
 
-When running via Podman or Docker, two named volumes are used:
+When running via Podman or Docker, one named volume is used:
 
 - `ganxterm_data` — SQLite database and encryption key, mounted at `/data`
-- `redis_data` — Redis persistence
 
-Keep the `ganxterm_data` volume and any `.env` file with tight permissions. If you set `GANXTERM_SECRET_KEY` via env var instead of relying on the auto-generated `secret.key` file, back it up — losing it means stored credentials cannot be decrypted.
+Keep this volume and any `.env` file with tight permissions. If you set `GANXTERM_SECRET_KEY` via env var instead of relying on the auto-generated `secret.key` file, back it up — losing it means stored credentials cannot be decrypted.
 
 ## Security Notes
 
 - Change the default admin password immediately after first login
 - Run behind a reverse proxy with TLS (nginx, Caddy, etc.) — the app itself does not terminate SSL
-- The `ganx_session` cookie is HttpOnly and `SameSite=lax`
+- Login tokens are stored in `sessionStorage` — each browser tab has an independent session that is cleared on tab close
 - Credentials are encrypted at rest; the encryption key lives in `secret.key` inside the `ganxterm_data` volume
