@@ -161,8 +161,11 @@
     .tsearch-btn:hover { color: var(--text); background: var(--border); }
 
     /* ── SFTP Panel ── */
-    .sftp-panel { width: 300px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border); display: none; flex-direction: column; overflow: hidden; }
+    .sftp-panel { width: 300px; flex-shrink: 0; background: var(--bg-panel); display: none; flex-direction: column; overflow: hidden; }
     .sftp-panel.visible { display: flex; }
+    .sftp-resize-handle { width: 5px; flex-shrink: 0; background: var(--border); cursor: col-resize; display: none; transition: background .15s; }
+    .sftp-resize-handle.visible { display: block; }
+    .sftp-resize-handle:hover, .sftp-resize-handle.dragging { background: var(--accent); }
     .sftp-toolbar { padding: 5px 8px; background: var(--bg-item); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
     .sftp-path-lbl { flex: 1; font-size: 0.72rem; font-family: 'Cascadia Code','Fira Code','Courier New',monospace; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .stb { background: var(--bg-hover); border: 1px solid var(--border); color: var(--muted); border-radius: 3px; cursor: pointer; font-size: 0.72rem; padding: 3px 7px; white-space: nowrap; flex-shrink: 0; transition: color .15s, border-color .15s; }
@@ -183,6 +186,7 @@
     .sr-icon { font-size: 0.82rem; flex-shrink: 0; }
     .sr-name { flex: 1; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sr-size { font-size: 0.68rem; color: var(--muted); min-width: 44px; text-align: right; flex-shrink: 0; }
+    .sr-mtime { font-size: 0.65rem; color: var(--muted); min-width: 100px; text-align: right; flex-shrink: 0; white-space: nowrap; padding-right: 4px; }
     .sr-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; flex-shrink: 0; }
     .sftp-row:hover .sr-actions { opacity: 1; }
     .sa { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.7rem; padding: 2px 4px; border-radius: 3px; line-height: 1; transition: color .15s, background .15s; }
@@ -444,6 +448,10 @@ function showToast(msg) { $('toastMsg').textContent = msg; $('sftpToast').classL
 function hideToast() { $('sftpToast').classList.remove('show'); }
 function joinPath(base, name) { return (base.endsWith('/') ? base : base + '/') + name; }
 function parentPath(p) { const parts = p.replace(/\/$/, '').split('/'); parts.pop(); return parts.join('/') || '/'; }
+function fmtDate(ts) {
+  if (!ts) return '-';
+  return new Date(ts * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+}
 function fmtSize(bytes) {
   if (!bytes) return '-';
   if (bytes < 1024)       return `${bytes}B`;
@@ -848,6 +856,29 @@ function connectSession(sessionId, sessionName) {
   const sftpPanel = buildSftpPanel(tabId, sessionId);
   pane.appendChild(sftpPanel);
 
+  // Drag-to-resize handle between SFTP panel and terminal
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'sftp-resize-handle';
+  resizeHandle.id = `sftp-handle-${tabId}`;
+  pane.appendChild(resizeHandle);
+  resizeHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX, startW = sftpPanel.getBoundingClientRect().width;
+    resizeHandle.classList.add('dragging');
+    const onMove = e => {
+      const w = Math.max(160, Math.min(700, startW + (e.clientX - startX)));
+      sftpPanel.style.width = w + 'px';
+      const t = tabs[tabId]; if (t) { t.fit.fit(); sendResize(tabId); }
+    };
+    const onUp = () => {
+      resizeHandle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
   // xterm wrapper (position:relative so search bar can float inside)
   const xtermWrapper = document.createElement('div');
   xtermWrapper.className = 'xterm-wrapper';
@@ -1024,6 +1055,7 @@ function toggleSftp(tabId) {
   const t = tabs[tabId]; if (!t) return;
   t.sftp.visible = !t.sftp.visible;
   $(`sftp-panel-${tabId}`).classList.toggle('visible', t.sftp.visible);
+  $(`sftp-handle-${tabId}`).classList.toggle('visible', t.sftp.visible);
   $(`stog-${tabId}`).classList.toggle('on', t.sftp.visible);
   if (t.sftp.visible) sftpLoad(tabId);
 }
@@ -1108,12 +1140,12 @@ function renderFiles(tabId, entries) {
   let html = '';
   if (t.sftp.path !== '/') {
     const pp = JSON.stringify(parentPath(t.sftp.path));
-    html += `<div class="sftp-row dir" data-path=${pp}><span class="sr-icon">📁</span><span class="sr-name" style="color:var(--muted)">..</span><span class="sr-size"></span><div class="sr-actions"></div></div>`;
+    html += `<div class="sftp-row dir" data-path=${pp}><span class="sr-icon">📁</span><span class="sr-name" style="color:var(--muted)">..</span><span class="sr-size"></span><span class="sr-mtime"></span><div class="sr-actions"></div></div>`;
   }
   for (const e of entries) {
     const isDir = e.type === 'dir', icon = isDir ? '📁' : fileIcon(e.name), size = isDir ? '' : fmtSize(e.size);
     const fp = JSON.stringify(joinPath(t.sftp.path, e.name)), isdirJ = JSON.stringify(isDir);
-    html += `<div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}><span class="sr-icon">${icon}</span><span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span><span class="sr-size">${size}</span><div class="sr-actions">${isDir ? '' : `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`}<button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button><button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button></div></div>`;
+    html += `<div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}><span class="sr-icon">${icon}</span><span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span><span class="sr-size">${size}</span><span class="sr-mtime">${fmtDate(e.mtime)}</span><div class="sr-actions">${isDir ? '' : `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`}<button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button><button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button></div></div>`;
   }
   container.innerHTML = html || '<div class="sftp-msg">Empty directory</div>';
 }

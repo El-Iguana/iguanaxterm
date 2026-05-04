@@ -583,7 +583,7 @@ async def sftp_ls(session_id: int, path: str = "/", user: dict = Depends(get_cur
     def _run():
         conn = sftp_manager.get(session_id, session)
         with conn.lock:
-            resolved = conn.sftp.normalize(path) if path in ("~", ".") else path
+            resolved = conn.sftp.normalize(".") if path in ("~", ".") else path
             return _list_dir(conn.sftp, resolved), resolved
 
     entries, resolved = await loop.run_in_executor(_sftp_pool, _run)
