@@ -11,8 +11,10 @@ services:
       - .env
     environment:
       - GANXTERM_DATA_DIR=/data
+      - GANXTERM_DOWNLOAD_DIR=/downloads
     volumes:
       - ganxterm_data:/data
+      - ${GANXTERM_DOWNLOAD_HOST_DIR:-./downloads}:/downloads
 
 volumes:
   ganxterm_data:

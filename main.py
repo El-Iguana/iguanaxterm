@@ -27,6 +27,7 @@ from pydantic import BaseModel
 _data_dir    = Path(os.getenv("GANXTERM_DATA_DIR", str(Path(__file__).parent)))
 DB_PATH      = _data_dir / "ganxterm.db"
 STATIC_DIR   = Path(__file__).parent / "static"
+_DOWNLOAD_DIR = Path(os.getenv("GANXTERM_DOWNLOAD_DIR", "/downloads"))
 
 _KEY_FILE    = _data_dir / "secret.key"
 _CRED_PREFIX = "fernet:"
@@ -669,6 +670,41 @@ async def sftp_ls_recursive(session_id: int, path: str, user: dict = Depends(get
 
     files = await loop.run_in_executor(_sftp_pool, _run)
     return {"files": files}
+
+
+@app.post("/api/sftp/{session_id}/download_folder_to_disk")
+async def sftp_download_folder_to_disk(
+    session_id: int,
+    path: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    session = _fetch_session(session_id, user["id"])
+    loop    = asyncio.get_event_loop()
+    folder_name = path.rstrip("/").rsplit("/", 1)[-1] or "folder"
+    dest = _DOWNLOAD_DIR / folder_name
+
+    def _run() -> dict:
+        conn = sftp_manager.get(session_id, session)
+        with conn.lock:
+            files: list = []
+            _collect_files(conn.sftp, path, files)
+            if not files:
+                return {"files_downloaded": 0, "dest": str(dest)}
+            parent = path.rstrip("/").rsplit("/", 1)[0]
+            for f in files:
+                rel = f["path"][len(parent) + 1:] if f["path"].startswith(parent + "/") else f["path"].rsplit("/", 1)[-1]
+                local = dest / rel
+                local.parent.mkdir(parents=True, exist_ok=True)
+                conn.sftp.get(f["path"], str(local))
+            return {"files_downloaded": len(files), "dest": str(dest)}
+
+    result = await loop.run_in_executor(_sftp_pool, _run)
+    return result
+
+
+@app.get("/api/config/download_dir")
+async def get_download_dir(user: dict = Depends(get_current_user)):
+    return {"path": str(_DOWNLOAD_DIR)}
 
 
 @app.post("/api/sftp/{session_id}/upload")
