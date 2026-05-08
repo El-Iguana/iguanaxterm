@@ -408,6 +408,26 @@
   </div>
 </div>
 
+<!-- ── Download Destination Modal ── -->
+<div class="overlay" id="overlayDlDest">
+  <div class="modal" style="width:440px">
+    <h2 id="dlDestTitle">Download Folder</h2>
+    <p id="dlDestInfo" style="font-size:0.82rem;color:var(--muted);margin-bottom:18px"></p>
+    <div class="fg">
+      <label>Save to</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" id="dlDestPickBtn" style="white-space:nowrap;flex-shrink:0">📁 Choose Folder</button>
+        <span id="dlDestPath" style="font-size:0.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:var(--muted)">Downloads folder</span>
+      </div>
+      <div id="dlDestNote" style="font-size:0.72rem;color:var(--muted);margin-top:7px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="dlDestCancel">Cancel</button>
+      <button class="btn btn-primary"   id="dlDestStart">Start Download</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Change Password Modal ── -->
 <div class="overlay" id="overlayCP">
   <div class="modal" style="width:380px">
@@ -1203,41 +1223,73 @@ function sftpDownload(tabId, path, size) {
   _dlEnqueue(t.sessionId, path, size || 0);
 }
 
+// ── Download destination modal ────────────────────────────────────────────────
+const _DL_CANCEL = Symbol('cancel');
+let _dlDestResolve = null;
+
+(function wireDlDestModal() {
+  const canPick = () => window.showDirectoryPicker && window.isSecureContext;
+
+  $('dlDestPickBtn').addEventListener('click', async () => {
+    if (!canPick()) return;
+    try {
+      const dh = await window.showDirectoryPicker({ mode: 'readwrite' });
+      $('dlDestPickBtn')._dh = dh;
+      $('dlDestPath').textContent = dh.name;
+      $('dlDestPath').style.color = 'var(--accent2)';
+    } catch (e) {
+      if (e.name !== 'AbortError') $('dlDestNote').textContent = `Picker failed: ${e.message}`;
+    }
+  });
+  const close = result => {
+    $('overlayDlDest').classList.remove('show');
+    if (_dlDestResolve) { _dlDestResolve(result); _dlDestResolve = null; }
+  };
+  $('dlDestCancel').addEventListener('click', () => close(_DL_CANCEL));
+  $('dlDestStart').addEventListener('click', () => close($('dlDestPickBtn')._dh || null));
+  $('overlayDlDest').addEventListener('click', e => { if (e.target === $('overlayDlDest')) close(_DL_CANCEL); });
+})();
+
+function showDlDestModal(folderName, fileCount) {
+  const canPick = window.showDirectoryPicker && window.isSecureContext;
+  $('dlDestTitle').textContent = `Download: ${folderName}`;
+  $('dlDestInfo').textContent = `${fileCount} file${fileCount !== 1 ? 's' : ''} queued for download`;
+  $('dlDestPickBtn')._dh = null;
+  $('dlDestPickBtn').disabled = !canPick;
+  $('dlDestPickBtn').style.opacity = canPick ? '' : '.4';
+  $('dlDestPath').textContent = 'Downloads folder';
+  $('dlDestPath').style.color = 'var(--muted)';
+  $('dlDestNote').textContent = canPick
+    ? 'Click "Choose Folder" to select a destination, or click "Start Download" to save to your Downloads folder.'
+    : 'Folder picker requires Chrome or Edge on localhost/HTTPS. Files will save to your Downloads folder.';
+  $('overlayDlDest').classList.add('show');
+  return new Promise(resolve => { _dlDestResolve = resolve; });
+}
+
 async function sftpDownloadDir(tabId, path) {
   const t = tabs[tabId];
-
-  // Pick destination directory once before scanning or queuing anything.
-  // showDirectoryPicker requires a secure context (HTTPS or localhost).
-  // On plain HTTP it exists but throws SecurityError — treat that as fatal
-  // rather than silently falling back to per-file Save-As dialogs.
-  let dirHandle = null;
-  if (!window.showDirectoryPicker) {
-    alert('Folder download requires Chrome or Edge accessed via localhost or HTTPS.\n\nTip: connect to this app using http://localhost:8765 instead of an IP address.');
-    return;
-  }
-  try {
-    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  } catch (e) {
-    if (e.name === 'AbortError') return;  // user cancelled picker
-    alert(`Could not open folder picker: ${e.message}\n\nAccess this app via localhost or HTTPS to enable folder downloads.`);
-    return;
-  }
-
   const name = path.split('/').pop() || 'folder';
+
+  // Scan the remote folder first so we can show the file count in the modal
   showToast(`Scanning ${name}…`);
+  let files;
   try {
     const r = await apiFetch(`/api/sftp/${t.sessionId}/ls_recursive?path=${encodeURIComponent(path)}`);
     hideToast();
     if (!r.ok) { alert('Failed to list folder'); return; }
-    const { files } = await r.json();
+    ({ files } = await r.json());
     if (!files.length) { setStatus('Folder is empty', 's-info'); return; }
-    // arcPath keeps the top-level folder name so subdirs are recreated in the destination
-    const baseDir = path.replace(/\/$/, '').split('/').slice(0, -1).join('/');
-    for (const f of files) {
-      const arcPath = f.path.startsWith(baseDir + '/') ? f.path.slice(baseDir.length + 1) : f.path.split('/').pop();
-      _dlEnqueue(t.sessionId, f.path, f.size, dirHandle, arcPath);
-    }
-  } catch (e) { hideToast(); if (!e.silent) alert('Failed to scan folder'); }
+  } catch (e) { hideToast(); if (!e.silent) alert('Failed to scan folder'); return; }
+
+  // Show destination modal — user picks folder or accepts Downloads default
+  const dirHandle = await showDlDestModal(name, files.length);
+  if (dirHandle === _DL_CANCEL) return;
+
+  const baseDir = path.replace(/\/$/, '').split('/').slice(0, -1).join('/');
+  for (const f of files) {
+    const arcPath = f.path.startsWith(baseDir + '/') ? f.path.slice(baseDir.length + 1) : f.path.split('/').pop();
+    _dlEnqueue(t.sessionId, f.path, f.size, dirHandle, arcPath);
+  }
 }
 async function sftpUploadFiles(tabId, files) {
   const t = tabs[tabId];
