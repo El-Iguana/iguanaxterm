@@ -1228,7 +1228,7 @@ const _DL_CANCEL = Symbol('cancel');
 let _dlDestResolve = null;
 
 (function wireDlDestModal() {
-  const canPick = () => window.showDirectoryPicker && window.isSecureContext;
+  const canPick = () => !!window.showDirectoryPicker;
 
   $('dlDestPickBtn').addEventListener('click', async () => {
     if (!canPick()) return;
@@ -1237,8 +1237,14 @@ let _dlDestResolve = null;
       $('dlDestPickBtn')._dh = dh;
       $('dlDestPath').textContent = dh.name;
       $('dlDestPath').style.color = 'var(--accent2)';
+      $('dlDestNote').textContent = '';
     } catch (e) {
-      if (e.name !== 'AbortError') $('dlDestNote').textContent = `Picker failed: ${e.message}`;
+      if (e.name === 'AbortError') return;
+      if (e.name === 'SecurityError') {
+        $('dlDestNote').textContent = 'Folder picker requires HTTPS (or localhost). Files will save to your Downloads folder.';
+      } else {
+        $('dlDestNote').textContent = `Picker failed: ${e.message}`;
+      }
     }
   });
   const close = result => {
@@ -1251,7 +1257,7 @@ let _dlDestResolve = null;
 })();
 
 function showDlDestModal(folderName, fileCount) {
-  const canPick = window.showDirectoryPicker && window.isSecureContext;
+  const canPick = !!window.showDirectoryPicker;
   $('dlDestTitle').textContent = `Download: ${folderName}`;
   $('dlDestInfo').textContent = `${fileCount} file${fileCount !== 1 ? 's' : ''} queued for download`;
   $('dlDestPickBtn')._dh = null;
@@ -1261,7 +1267,7 @@ function showDlDestModal(folderName, fileCount) {
   $('dlDestPath').style.color = 'var(--muted)';
   $('dlDestNote').textContent = canPick
     ? 'Click "Choose Folder" to select a destination, or click "Start Download" to save to your Downloads folder.'
-    : 'Folder picker requires Chrome or Edge on localhost/HTTPS. Files will save to your Downloads folder.';
+    : 'Folder picker requires Chrome or Edge. Files will save to your Downloads folder.';
   $('overlayDlDest').classList.add('show');
   return new Promise(resolve => { _dlDestResolve = resolve; });
 }
