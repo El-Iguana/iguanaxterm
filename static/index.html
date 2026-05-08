@@ -1155,11 +1155,22 @@ $('dlQueueClear').addEventListener('click', e => {
   _dlRender();
 });
 
-function _dlEnqueue(sessionId, path, size) {
-  _dlItems.push({ id: ++_dlSeq, sessionId, path, name: path.split('/').pop(), size: size || 0, status: 'queued' });
+function _dlEnqueue(sessionId, path, size, dirHandle = null, arcPath = null) {
+  _dlItems.push({ id: ++_dlSeq, sessionId, path, name: path.split('/').pop(), size: size || 0, status: 'queued', dirHandle, arcPath });
   _dlCollapsed = false;
   _dlRender();
   _dlProcess();
+}
+
+async function _dlWriteToDir(dirHandle, arcPath, blob) {
+  const parts = arcPath.split('/').filter(Boolean);
+  const fileName = parts.pop();
+  let dir = dirHandle;
+  for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true });
+  const fh = await dir.getFileHandle(fileName, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
 }
 
 async function _dlProcess() {
@@ -1173,9 +1184,13 @@ async function _dlProcess() {
     const r = await apiFetch(`/api/sftp/${item.sessionId}/download?path=${encodeURIComponent(item.path)}`);
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || 'Failed'); }
     const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (item.dirHandle && item.arcPath) {
+      await _dlWriteToDir(item.dirHandle, item.arcPath, blob);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
     item.status = 'done';
   } catch (e) { item.status = 'error'; item.error = e.silent ? 'Session expired' : (e.message || 'Failed'); }
   _dlRunning = false;
@@ -1190,6 +1205,18 @@ function sftpDownload(tabId, path, size) {
 
 async function sftpDownloadDir(tabId, path) {
   const t = tabs[tabId];
+
+  // Pick destination directory once before scanning or queuing anything
+  let dirHandle = null;
+  if (window.showDirectoryPicker) {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (e) {
+      if (e.name === 'AbortError') return;  // user cancelled picker
+      // API unavailable or denied — fall through to per-file downloads
+    }
+  }
+
   const name = path.split('/').pop() || 'folder';
   showToast(`Scanning ${name}…`);
   try {
@@ -1198,7 +1225,12 @@ async function sftpDownloadDir(tabId, path) {
     if (!r.ok) { alert('Failed to list folder'); return; }
     const { files } = await r.json();
     if (!files.length) { setStatus('Folder is empty', 's-info'); return; }
-    for (const f of files) _dlEnqueue(t.sessionId, f.path, f.size);
+    // arcPath keeps the top-level folder name so subdirs are recreated in the destination
+    const baseDir = path.replace(/\/$/, '').split('/').slice(0, -1).join('/');
+    for (const f of files) {
+      const arcPath = f.path.startsWith(baseDir + '/') ? f.path.slice(baseDir.length + 1) : f.path.split('/').pop();
+      _dlEnqueue(t.sessionId, f.path, f.size, dirHandle, arcPath);
+    }
   } catch (e) { hideToast(); if (!e.silent) alert('Failed to scan folder'); }
 }
 async function sftpUploadFiles(tabId, files) {
