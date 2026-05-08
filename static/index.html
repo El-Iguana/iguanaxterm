@@ -1206,15 +1206,21 @@ function sftpDownload(tabId, path, size) {
 async function sftpDownloadDir(tabId, path) {
   const t = tabs[tabId];
 
-  // Pick destination directory once before scanning or queuing anything
+  // Pick destination directory once before scanning or queuing anything.
+  // showDirectoryPicker requires a secure context (HTTPS or localhost).
+  // On plain HTTP it exists but throws SecurityError — treat that as fatal
+  // rather than silently falling back to per-file Save-As dialogs.
   let dirHandle = null;
-  if (window.showDirectoryPicker) {
-    try {
-      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    } catch (e) {
-      if (e.name === 'AbortError') return;  // user cancelled picker
-      // API unavailable or denied — fall through to per-file downloads
-    }
+  if (!window.showDirectoryPicker) {
+    alert('Folder download requires Chrome or Edge accessed via localhost or HTTPS.\n\nTip: connect to this app using http://localhost:8765 instead of an IP address.');
+    return;
+  }
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    if (e.name === 'AbortError') return;  // user cancelled picker
+    alert(`Could not open folder picker: ${e.message}\n\nAccess this app via localhost or HTTPS to enable folder downloads.`);
+    return;
   }
 
   const name = path.split('/').pop() || 'folder';
