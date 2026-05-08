@@ -684,10 +684,11 @@ async def sftp_download_folder_to_disk(
     dest = _DOWNLOAD_DIR / folder_name
 
     def _run() -> dict:
-        conn = sftp_manager.get(session_id, session)
-        with conn.lock:
+        # Dedicated connection so bulk get() never shares a channel with the browser session
+        dl_conn = SFTPManager._build(session)
+        try:
             files: list = []
-            _collect_files(conn.sftp, path, files)
+            _collect_files(dl_conn.sftp, path, files)
             if not files:
                 return {"files_downloaded": 0, "dest": str(dest)}
             parent = path.rstrip("/").rsplit("/", 1)[0]
@@ -695,8 +696,13 @@ async def sftp_download_folder_to_disk(
                 rel = f["path"][len(parent) + 1:] if f["path"].startswith(parent + "/") else f["path"].rsplit("/", 1)[-1]
                 local = dest / rel
                 local.parent.mkdir(parents=True, exist_ok=True)
-                conn.sftp.get(f["path"], str(local))
+                dl_conn.sftp.get(f["path"], str(local))
             return {"files_downloaded": len(files), "dest": str(dest)}
+        finally:
+            try:
+                dl_conn.ssh.close()
+            except Exception:
+                pass
 
     result = await loop.run_in_executor(_sftp_pool, _run)
     return result
