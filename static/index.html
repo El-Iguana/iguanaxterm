@@ -1033,9 +1033,10 @@ function buildSftpPanel(tabId, sessionId) {
     if (btn) {
       e.stopPropagation();
       const { action, path, isdir } = btn.dataset;
-      if (action === 'download') sftpDownload(tabId, path);
-      if (action === 'rename')   sftpRenamePrompt(tabId, path);
-      if (action === 'delete')   sftpDelete(tabId, path, isdir === 'true');
+      if (action === 'download')     sftpDownload(tabId, path);
+      if (action === 'download_dir') sftpDownloadDir(tabId, path);
+      if (action === 'rename')       sftpRenamePrompt(tabId, path);
+      if (action === 'delete')       sftpDelete(tabId, path, isdir === 'true');
       return;
     }
     const row = e.target.closest('.sftp-row.dir[data-path]');
@@ -1106,6 +1107,21 @@ async function sftpDownload(tabId, path) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) { if (!e.silent) alert('Download failed'); }
 }
+async function sftpDownloadDir(tabId, path) {
+  const t = tabs[tabId];
+  const name = path.split('/').pop() || 'folder';
+  showToast(`Zipping ${name}…`);
+  try {
+    const r = await apiFetch(`/api/sftp/${t.sessionId}/download_dir?path=${encodeURIComponent(path)}`);
+    hideToast();
+    if (!r.ok) { alert('Download failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${name}.zip`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { hideToast(); if (!e.silent) alert('Download failed'); }
+}
 async function sftpUploadFiles(tabId, files) {
   const t = tabs[tabId];
   for (const file of files) {
@@ -1145,7 +1161,10 @@ function renderFiles(tabId, entries) {
   for (const e of entries) {
     const isDir = e.type === 'dir', icon = isDir ? '📁' : fileIcon(e.name), size = isDir ? '' : fmtSize(e.size);
     const fp = JSON.stringify(joinPath(t.sftp.path, e.name)), isdirJ = JSON.stringify(isDir);
-    html += `<div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}><span class="sr-icon">${icon}</span><span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span><span class="sr-size">${size}</span><span class="sr-mtime">${fmtDate(e.mtime)}</span><div class="sr-actions">${isDir ? '' : `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`}<button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button><button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button></div></div>`;
+    const dlBtn = isDir
+      ? `<button class="sa sa-dl" data-action="download_dir" data-path=${fp} title="Download as ZIP">⬇</button>`
+      : `<button class="sa sa-dl" data-action="download" data-path=${fp} title="Download">⬇</button>`;
+    html += `<div class="sftp-row ${isDir ? 'dir' : 'file'}" data-path=${fp}><span class="sr-icon">${icon}</span><span class="sr-name" title=${JSON.stringify(e.name)}>${esc(e.name)}</span><span class="sr-size">${size}</span><span class="sr-mtime">${fmtDate(e.mtime)}</span><div class="sr-actions">${dlBtn}<button class="sa" data-action="rename" data-path=${fp} data-isdir=${isdirJ} title="Rename">✏</button><button class="sa sa-del" data-action="delete" data-path=${fp} data-isdir=${isdirJ} title="Delete">🗑</button></div></div>`;
   }
   container.innerHTML = html || '<div class="sftp-msg">Empty directory</div>';
 }

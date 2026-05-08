@@ -9,6 +9,7 @@ import secrets
 import sqlite3
 import stat as stat_module
 import threading
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
@@ -256,6 +257,26 @@ sftp_manager = SFTPManager()
 
 
 # ── SFTP helpers ──────────────────────────────────────────────────────────────
+
+def _zip_sftp_dir(sftp: paramiko.SFTPClient, remote_dir: str, zf: zipfile.ZipFile, strip_prefix: str):
+    """Recursively pack remote_dir into zf. arcnames are paths relative to strip_prefix."""
+    try:
+        attrs = sftp.listdir_attr(remote_dir)
+    except Exception:
+        return
+    for a in attrs:
+        child = f"{remote_dir.rstrip('/')}/{a.filename}"
+        arc = child[len(strip_prefix):].lstrip('/')
+        if stat_module.S_ISDIR(a.st_mode or 0):
+            _zip_sftp_dir(sftp, child, zf, strip_prefix)
+        else:
+            buf = io.BytesIO()
+            try:
+                sftp.getfo(child, buf)
+                zf.writestr(arc, buf.getvalue())
+            except Exception:
+                pass
+
 
 def _list_dir(sftp: paramiko.SFTPClient, path: str) -> list[dict]:
     try:
@@ -639,6 +660,29 @@ async def sftp_delete(session_id: int, path: str, user: dict = Depends(get_curre
 
     await loop.run_in_executor(_sftp_pool, _run)
     return {"ok": True}
+
+
+@app.get("/api/sftp/{session_id}/download_dir")
+async def sftp_download_dir(session_id: int, path: str, user: dict = Depends(get_current_user)):
+    session = _fetch_session(session_id, user["id"])
+    loop    = asyncio.get_event_loop()
+
+    def _run() -> tuple[bytes, str]:
+        conn = sftp_manager.get(session_id, session)
+        with conn.lock:
+            folder_name = path.rstrip('/').rsplit('/', 1)[-1] or 'root'
+            strip_prefix = path.rstrip('/').rsplit('/', 1)[0]
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                _zip_sftp_dir(conn.sftp, path, zf, strip_prefix)
+            return buf.getvalue(), folder_name
+
+    content, folder_name = await loop.run_in_executor(_sftp_pool, _run)
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{folder_name}.zip"'},
+    )
 
 
 @app.post("/api/sftp/{session_id}/upload")
