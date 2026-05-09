@@ -223,6 +223,13 @@
     .dl-ic-downloading { color: var(--warn); animation: spin .8s linear infinite; display: inline-block; }
     .dl-ic-done  { color: var(--accent2); }
     .dl-ic-error { color: var(--danger); }
+    .dl-browser-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+    .dl-browser-row:last-child { border-bottom: none; }
+    .dl-browser-row:hover { background: var(--bg-item); }
+    .dl-browser-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .dl-browser-name.dir { color: var(--accent); font-weight: 600; }
+    .dl-browser-name.file { color: var(--text); }
+    .dl-browser-size { color: var(--muted); font-size: 0.72rem; flex-shrink: 0; }
 
     /* ── Status bar ── */
     .status-bar { background: var(--bg-panel); border-top: 1px solid var(--border); padding: 3px 14px; font-size: 0.72rem; color: var(--muted); display: flex; gap: 20px; flex-shrink: 0; }
@@ -456,7 +463,20 @@
   </div>
   <div class="dl-queue-body" id="dlQueueBody"></div>
   <div class="dl-queue-footer">
+    <button class="stb" id="dlQueueBrowse" style="font-size:0.68rem;padding:2px 7px" title="Browse download folder">📂 Browse</button>
     <button class="stb" id="dlQueueClear" style="font-size:0.68rem;padding:2px 7px">Clear done</button>
+  </div>
+</div>
+
+<!-- ── Downloads Browser Modal ── -->
+<div class="overlay" id="overlayDlBrowser">
+  <div class="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0">Downloads</h2>
+      <button class="stb" id="dlBrowserClose" style="font-size:1.1rem;padding:2px 8px">✕</button>
+    </div>
+    <div id="dlBrowserCrumb" style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;word-break:break-all"></div>
+    <div id="dlBrowserList" style="flex:1;overflow-y:auto;min-height:120px"></div>
   </div>
 </div>
 
@@ -1155,6 +1175,67 @@ $('dlQueueClear').addEventListener('click', e => {
   for (let i = _dlItems.length - 1; i >= 0; i--) { if (_dlItems[i].status === 'done') _dlItems.splice(i, 1); }
   _dlRender();
 });
+$('dlQueueBrowse').addEventListener('click', e => { e.stopPropagation(); openDlBrowser(''); });
+
+// ── Downloads browser ─────────────────────────────────────────────────────────
+function openDlBrowser(path) {
+  $('overlayDlBrowser').classList.add('show');
+  loadDlBrowser(path);
+}
+
+async function loadDlBrowser(path) {
+  $('dlBrowserList').innerHTML = '<div style="padding:12px;color:var(--muted);font-size:0.8rem">Loading…</div>';
+  const crumb = path ? path.split('/').filter(Boolean) : [];
+  let crumbHtml = `<span class="dl-browser-crumb-link" data-path="" style="cursor:pointer;color:var(--accent)">Downloads</span>`;
+  let built = '';
+  for (const part of crumb) {
+    built += (built ? '/' : '') + part;
+    const p = built;
+    crumbHtml += ` / <span class="dl-browser-crumb-link" data-path="${esc(p)}" style="cursor:pointer;color:var(--accent)">${esc(part)}</span>`;
+  }
+  $('dlBrowserCrumb').innerHTML = crumbHtml;
+  $('dlBrowserCrumb').querySelectorAll('.dl-browser-crumb-link').forEach(el =>
+    el.addEventListener('click', () => loadDlBrowser(el.dataset.path))
+  );
+
+  try {
+    const r = await apiFetch(`/api/downloads/ls?path=${encodeURIComponent(path)}`);
+    if (!r.ok) { $('dlBrowserList').innerHTML = '<div style="padding:12px;color:var(--danger)">Failed to load</div>'; return; }
+    const { entries } = await r.json();
+    if (!entries.length) {
+      $('dlBrowserList').innerHTML = '<div style="padding:12px;color:var(--muted);font-size:0.8rem">Empty folder</div>';
+      return;
+    }
+    $('dlBrowserList').innerHTML = (path ? `<div class="dl-browser-row"><span class="dl-browser-name dir" data-path="${esc(path.split('/').slice(0, -1).join('/'))}" style="color:var(--muted)">← Back</span></div>` : '') +
+      entries.map(e => `<div class="dl-browser-row">
+        <span class="dl-browser-name ${e.is_dir ? 'dir' : 'file'}" data-path="${esc(e.path)}" data-isdir="${e.is_dir}">${e.is_dir ? '📁 ' : '📄 '}${esc(e.name)}</span>
+        ${!e.is_dir ? `<span class="dl-browser-size">${fmtSize(e.size)}</span><button class="stb dl-browser-dl" data-path="${esc(e.path)}" data-name="${esc(e.name)}" style="font-size:0.72rem;padding:1px 6px" title="Download to browser">⬇</button>` : ''}
+      </div>`).join('');
+    $('dlBrowserList').querySelectorAll('.dl-browser-name').forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.dataset.isdir === 'true' || el.classList.contains('dir')) loadDlBrowser(el.dataset.path);
+      });
+    });
+    $('dlBrowserList').querySelectorAll('.dl-browser-dl').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const r = await apiFetch(`/api/downloads/file?path=${encodeURIComponent(btn.dataset.path)}`);
+          if (!r.ok) { alert('Download failed'); return; }
+          const blob = await r.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = btn.dataset.name; a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } finally { btn.disabled = false; }
+      });
+    });
+  } catch (e) {
+    $('dlBrowserList').innerHTML = '<div style="padding:12px;color:var(--danger)">Error loading folder</div>';
+  }
+}
+
+$('dlBrowserClose').addEventListener('click', () => $('overlayDlBrowser').classList.remove('show'));
+$('overlayDlBrowser').addEventListener('click', e => { if (e.target === $('overlayDlBrowser')) $('overlayDlBrowser').classList.remove('show'); });
 
 function _dlEnqueue(sessionId, path, size) {
   _dlItems.push({ id: ++_dlSeq, sessionId, path, name: path.split('/').pop(), size: size || 0, status: 'queued' });

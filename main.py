@@ -17,7 +17,7 @@ import paramiko
 import uvicorn
 from cryptography.fernet import Fernet
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import bcrypt as _bcrypt
 from pydantic import BaseModel
@@ -691,7 +691,7 @@ async def sftp_download_folder_to_disk(
             _collect_files(dl_conn.sftp, path, files)
             if not files:
                 return {"files_downloaded": 0, "dest": str(dest)}
-            parent = path.rstrip("/").rsplit("/", 1)[0]
+            parent = path.rstrip("/")
             for f in files:
                 rel = f["path"][len(parent) + 1:] if f["path"].startswith(parent + "/") else f["path"].rsplit("/", 1)[-1]
                 local = dest / rel
@@ -711,6 +711,39 @@ async def sftp_download_folder_to_disk(
 @app.get("/api/config/download_dir")
 async def get_download_dir(user: dict = Depends(get_current_user)):
     return {"path": str(_DOWNLOAD_DIR)}
+
+
+def _dl_safe_path(rel: str) -> Path:
+    base = _DOWNLOAD_DIR.resolve()
+    p = (base / rel.lstrip("/")).resolve()
+    if not str(p).startswith(str(base)):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return p
+
+
+@app.get("/api/downloads/ls")
+async def downloads_ls(path: str = "", user: dict = Depends(get_current_user)):
+    p = _dl_safe_path(path)
+    if not p.exists():
+        return {"entries": [], "path": path}
+    entries = []
+    for child in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+        entries.append({
+            "name": child.name,
+            "path": str(child.relative_to(_DOWNLOAD_DIR)),
+            "is_dir": child.is_dir(),
+            "size": child.stat().st_size if child.is_file() else 0,
+        })
+    rel = str(p.relative_to(_DOWNLOAD_DIR)) if p != _DOWNLOAD_DIR.resolve() else ""
+    return {"entries": entries, "path": rel}
+
+
+@app.get("/api/downloads/file")
+async def downloads_file(path: str, user: dict = Depends(get_current_user)):
+    p = _dl_safe_path(path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(str(p), filename=p.name)
 
 
 @app.post("/api/sftp/{session_id}/upload")
