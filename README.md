@@ -1,6 +1,18 @@
 # IguanaXterm
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-1.1.0-green.svg)]()
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-1.1.0-green.svg)]() [![Status: retired](https://img.shields.io/badge/status-retired-lightgrey.svg)](https://github.com/El-Iguana/iguanaxterm_wapyt)
+
+> [!IMPORTANT]
+> **This version is retired and no longer maintained.** IguanaXterm 2 replaces
+> it: **[El-Iguana/iguanaxterm_wapyt](https://github.com/El-Iguana/iguanaxterm_wapyt)**.
+>
+> Version 2 does everything this one does and more: a tiled workspace
+> alongside tabs, a layout that comes back with Reconnect all, SFTP-only and
+> FTP/FTPS connections, host-key and certificate pinning, streaming uploads
+> with no size cap, and folder downloads in any browser. Note that version 2
+> is MIT-licensed, where this one is AGPL-3.0.
+>
+> The code below stays as it was for reference.
 
 A browser-based SSH/Telnet terminal manager with SFTP support. Manage all your remote connections from a single web UI — no client software required.
 
